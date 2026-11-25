@@ -42,6 +42,20 @@ for (const mode of ["light", "dark"] as const) {
   test.describe(`${mode} colour mode`, () => {
     test("homepage meets automated WCAG A/AA rules", async ({ page }) => {
       await openHomepage(page, mode);
+      const hero = page.locator(".home-hero");
+      await expect(hero).toBeVisible();
+      // Ensure the decorative background is bundled and actually loads.
+      expect(
+        await hero.evaluate(async (element) => {
+          const background = getComputedStyle(element).backgroundImage;
+          const url = background.match(/url\(["']?([^"')]+)["']?\)/)?.[1];
+          if (!url) return false;
+          const image = new Image();
+          image.src = url;
+          await image.decode();
+          return image.naturalWidth > 0;
+        }),
+      ).toBe(true);
       await audit(page);
     });
 

@@ -28,17 +28,19 @@ const links: ButtonProps[] = [
 <template>
   <div>
     <UPageHero
+      class="home-hero"
       title="Your dice. Your tools."
       description="A growing collection of free, open-source utilities for RPG Dice Roller."
       :links="links"
       :ui="{
         container: 'py-16 sm:py-20 lg:py-24',
         title: 'font-serif',
+        description: 'text-toned',
         footer: 'mt-8',
       }"
     />
 
-    <UContainer class="pb-12 sm:pb-16">
+    <UContainer class="py-8 sm:pb-16">
       <section
         id="tools"
         aria-labelledby="tools-heading"
@@ -91,3 +93,17 @@ const links: ButtonProps[] = [
     </UContainer>
   </div>
 </template>
+
+<style scoped>
+.home-hero {
+  /* Same artwork as the documentation, with a theme-aware contrast overlay. */
+  --hero-overlay: color-mix(in srgb, var(--ui-bg) 75%, transparent);
+
+  background-image:
+    linear-gradient(var(--hero-overlay), var(--hero-overlay)),
+    url("~/assets/images/home-background.webp");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+</style>
