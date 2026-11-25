@@ -37,6 +37,10 @@
 }
 
 :root:not(.dark) {
+  /* The preset's lighter shades fail AA for normal-sized text on cream. */
+  --ui-primary: var(--ui-color-primary-700);
+  --ui-text-muted: var(--ui-color-neutral-600);
+  --ui-text-dimmed: var(--ui-color-neutral-600);
   --ui-bg: var(--ui-color-neutral-100);
   --ui-bg-muted: var(--ui-color-neutral-200);
   --ui-bg-elevated: var(--ui-color-neutral-200);
@@ -47,6 +51,13 @@
 }
 
 .dark {
+  --ui-text-dimmed: var(--ui-color-neutral-400);
   --ui-primary: var(--ui-color-primary-500);
   --ui-bg-accented: var(--ui-color-neutral-800);
+}
+
+/* Keep keyboard focus visible independently of component hover/active styles. */
+:focus-visible {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 2px;
 }

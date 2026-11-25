@@ -36,6 +36,17 @@ Nuxt automatically creates routes from Vue files in `app/pages/`. For example, `
 
 See the [Nuxt documentation](https://nuxt.com/docs/4.x/getting-started/introduction) and [Nuxt UI component catalogue](https://ui.nuxt.com/docs/components).
 
+## Accessibility and contributing
+
+Accessibility is a core project requirement. See [CONTRIBUTING.md](CONTRIBUTING.md) for our WCAG 2.2 AA target, manual review expectations and Playwright/axe-core tests.
+
+```sh
+npx playwright install chromium
+npm run test:e2e
+```
+
+The end-to-end tests generate and serve the static website automatically.
+
 ## Publishing
 
 The Publish website workflow generates and deploys static files to GitHub Pages whenever `main` is updated. It can also be run manually from `main`. Other branches and pull requests run CI without publishing.

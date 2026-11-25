@@ -31,12 +31,23 @@ const mobileItems: NavigationMenuItem[] = [
 
 <template>
   <div>
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-100 focus:rounded-md focus:bg-default focus:p-3 focus:text-highlighted"
+    >
+      Skip to main content
+    </a>
     <UHeader title="Dice Roller Tools">
       <template #title>
         <SiteLogo />
       </template>
 
-      <UNavigationMenu :items="items" content-orientation="vertical" />
+      <UNavigationMenu
+        as="nav"
+        aria-label="Main navigation"
+        :items="items"
+        content-orientation="vertical"
+      />
 
       <template #right>
         <UButton
@@ -52,6 +63,8 @@ const mobileItems: NavigationMenuItem[] = [
 
       <template #body>
         <UNavigationMenu
+          as="nav"
+          aria-label="Mobile navigation"
           :items="mobileItems"
           orientation="vertical"
           class="-mx-2.5"
@@ -59,7 +72,7 @@ const mobileItems: NavigationMenuItem[] = [
       </template>
     </UHeader>
 
-    <UMain>
+    <UMain id="main-content" tabindex="-1" class="scroll-mt-20">
       <slot />
     </UMain>
 

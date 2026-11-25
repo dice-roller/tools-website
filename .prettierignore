@@ -4,3 +4,5 @@ package-lock.json
 .nuxt/
 .output/
 .data/
+playwright-report/
+test-results/

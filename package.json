@@ -15,7 +15,8 @@
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "lint": "eslint . && prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.2.0",
@@ -29,9 +30,12 @@
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
     "@nuxt/eslint": "^1.17.0",
+    "@playwright/test": "^1.58.0",
     "@types/node": "^24.0.0",
     "eslint": "^10.15.0",
+    "http-server": "^14.1.1",
     "prettier": "^3.10.1",
     "typescript": "^6.0.3",
     "vue-tsc": "^3.3.14"
