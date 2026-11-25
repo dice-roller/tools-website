@@ -11,7 +11,7 @@ export default defineNuxtConfig({
     },
   },
   ui: {
-    // Choose and configure fonts when the site's visual design is introduced.
+    // Parchment fonts are bundled locally via Fontsource.
     fonts: false,
   },
   nitro: {

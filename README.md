@@ -22,11 +22,15 @@ The static production website is generated in `.output/public/`. The GitHub Page
 
 ## Structure and routing
 
-- `app/app.vue`: the minimal application entry, wrapped in Nuxt UI's `UApp` provider.
+- `app/app.vue`: the application entry, wrapped in Nuxt UI's `UApp` provider.
+- `app/layouts/default.vue`: shared site header, navigation and footer.
+- `app/pages/index.vue`: the homepage.
+- `app/data/tools.ts`: the tool catalogue and shared external links.
+- `app/app.config.ts`: Nuxt UI semantic colours and icons.
 - `app/assets/css/main.css`: shared Tailwind CSS and Nuxt UI styles.
 - `nuxt.config.ts`: framework, module and static hosting configuration.
 
-The scaffold deliberately contains no pages or tool implementations. When the first page is added, replace the empty element in `app/app.vue` with `<NuxtPage />` (and `<NuxtLayout>` when shared layouts are introduced).
+The homepage uses Nuxt UI's Parchment preset (palette and tokens in `app/assets/css/main.css`, semantic colours and icons in `app/app.config.ts`). Fonts are bundled locally. The existing documentation logo is reused from the [documentation repository](https://github.com/dice-roller/documentation/blob/next/docs/public/dice-roller-logo.png); the current artwork derived from [Font Awesome](https://fontawesome.com/license/free) is retained pending its replacement. No individual tools are implemented yet.
 
 Nuxt automatically creates routes from Vue files in `app/pages/`. For example, `app/pages/index.vue` becomes `/` and `app/pages/converter.vue` becomes `/converter`. Use `NuxtLink` for internal navigation. Components, layouts and composables can live in `app/components/`, `app/layouts/` and `app/composables/` respectively.
 
