@@ -120,3 +120,81 @@ test("homepage reflows at a narrow viewport", async ({ page }) => {
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
 });
+
+for (const mode of ["light", "dark"] as const) {
+  test.describe(`converter in ${mode} mode`, () => {
+    test("converter layout meets automated WCAG A/AA rules", async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: mode });
+      await page.goto("/converter");
+      await expect(
+        page.getByRole("heading", { name: "Data converter", exact: true }),
+      ).toBeVisible();
+      await expect(page.locator("html")).toHaveClass(new RegExp(mode));
+      await expect(
+        page.getByRole("button", { name: /switch to (light|dark) mode/i }),
+      ).toBeVisible();
+      await audit(page);
+
+      const select = page.getByLabel("Output format", { exact: true });
+      await select.focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("option", { name: "Concise" })).toBeVisible();
+      await audit(page);
+      await page.keyboard.press("Escape");
+      await expect(select).toBeFocused();
+
+      const options = page.getByRole("button", {
+        name: "Supported formats and conversion options",
+      });
+      await options.focus();
+      await page.keyboard.press("Enter");
+      await expect(options).toHaveAttribute("aria-expanded", "true");
+      await audit(page);
+    });
+
+    test("converter reflows at 320px", async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.emulateMedia({ colorScheme: mode });
+      await page.goto("/converter");
+      await expect(
+        page.getByRole("heading", { name: "Data converter", exact: true }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(320);
+      await audit(page);
+    });
+  });
+}
+
+test("converter preview is reachable from the homepage", async ({ page }) => {
+  await openHomepage(page, "light");
+  await page
+    .getByRole("link", { name: "Preview data converter", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/converter\/?$/);
+  await expect(
+    page.getByRole("button", { name: "Convert data" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Upload file" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Load example" }),
+  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Copy" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Download" })).toBeDisabled();
+  await expect(
+    page.getByRole("textbox", { name: "Input encoding" }),
+  ).toHaveValue("Auto-detect");
+  await expect(
+    page.getByRole("textbox", { name: "Data to convert" }),
+  ).toBeEditable();
+  const strict = page.getByRole("switch", { name: "Strict conversion" });
+  await expect(strict).toBeChecked();
+  await strict.focus();
+  await page.keyboard.press("Space");
+  await expect(strict).not.toBeChecked();
+});

@@ -75,7 +75,16 @@ const links: ButtonProps[] = [
             :icon="tool.icon"
           >
             <template #footer>
-              <UBadge color="neutral" variant="subtle" :label="tool.status" />
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <UBadge color="neutral" variant="subtle" :label="tool.status" />
+                <UButton
+                  v-if="tool.path"
+                  :to="tool.path"
+                  label="Preview data converter"
+                  trailing-icon="i-heroicons-arrow-right"
+                  variant="link"
+                />
+              </div>
             </template>
           </UPageCard>
         </UPageGrid>

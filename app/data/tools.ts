@@ -3,12 +3,14 @@ export interface Tool {
   title: string;
   description: string;
   icon: string;
+  path?: string;
   status: "Coming soon" | "Planned";
 }
 
 export const tools: readonly Tool[] = [
   {
     id: "converter",
+    path: "/converter",
     title: "Data converter",
     description:
       "Convert exported rolls and histories between supported data versions and formats.",
