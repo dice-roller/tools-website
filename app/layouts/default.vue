@@ -11,6 +11,7 @@ const items: NavigationMenuItem[] = [
       description: tool.status,
       icon: tool.icon,
       to: { path: "/", hash: `#${tool.id}` },
+      exactHash: true,
     })),
   },
   { label: "Documentation", to: documentationUrl, target: "_blank" },
@@ -22,6 +23,7 @@ const mobileItems: NavigationMenuItem[] = [
     label: tool.title,
     icon: tool.icon,
     to: { path: "/", hash: `#${tool.id}` },
+    exactHash: true,
   })),
   { label: "Documentation", to: documentationUrl, target: "_blank" },
 ];
@@ -34,7 +36,7 @@ const mobileItems: NavigationMenuItem[] = [
         <SiteLogo />
       </template>
 
-      <UNavigationMenu :items="items" />
+      <UNavigationMenu :items="items" content-orientation="vertical" />
 
       <template #right>
         <UButton
