@@ -18,7 +18,9 @@ test("converts a legacy export and downloads the result", async ({ page }) => {
   const output = page.getByRole("textbox", { name: "Converted data" });
   await expect(output).toBeVisible();
   const form = page.getByRole("form", { name: "Conversion options" });
-  await expect(form.getByRole("status")).toContainText("Conversion complete.");
+  await expect(
+    form.getByRole("status", { name: "Conversion status" }),
+  ).toContainText("Conversion complete.");
   expect(JSON.parse(await output.inputValue())).toMatchObject({
     type: "roll",
     version: 1,
@@ -147,9 +149,9 @@ test("strict conversion rejects inconsistent totals and best effort warns", asyn
 
   await page.getByRole("switch", { name: "Strict conversion" }).click();
   await submit.click();
-  await expect(form.getByRole("status")).toContainText(
-    "Conversion complete with warnings.",
-  );
+  await expect(
+    form.getByRole("status", { name: "Conversion status" }),
+  ).toContainText("Conversion complete with warnings.");
   await expect(
     form.getByText("Conversion warnings", { exact: true }),
   ).toBeVisible();
@@ -282,4 +284,26 @@ test("download names retain the uploaded stem and describe the output", async ({
   await input.fill(JSON.stringify(legacyExample, null, 2));
   await submit.click();
   expect(await downloadName()).toBe("converted-roll-v5-full.txt");
+});
+
+test("mobile conversion feedback is visible and links to the output", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/converter");
+  const input = page.getByRole("textbox", { name: "Data to convert" });
+  const submit = page.getByRole("button", { name: "Convert data" });
+  await input.fill("{invalid");
+  await submit.click();
+  await expect(page.getByRole("alert")).toBeInViewport();
+
+  await page.getByRole("button", { name: "Load example" }).click();
+  await submit.click();
+  const status = page.getByRole("status", { name: "Conversion status" });
+  await expect(status).toContainText("Conversion complete.");
+  await expect(status).toBeInViewport();
+  await page.getByRole("button", { name: "View converted output" }).click();
+  const heading = page.getByRole("heading", { name: "Output", exact: true });
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
 });

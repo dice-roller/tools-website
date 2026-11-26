@@ -170,6 +170,10 @@ const warnings = ref<ConversionWarning[]>([]);
 const error = ref("");
 const status = ref("");
 const statusColor = ref<"success" | "warning">("success");
+const actionStatus = ref("");
+const actionColor = ref<"success" | "warning">("success");
+const feedback = ref<HTMLElement | null>(null);
+const outputHeading = ref<HTMLElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const readingFile = ref(false);
 const uploadedFilename = ref("");
@@ -180,6 +184,8 @@ function clearResult() {
   error.value = "";
   status.value = "";
   statusColor.value = "success";
+  actionStatus.value = "";
+  actionColor.value = "success";
 }
 
 watch(state, clearResult);
@@ -214,7 +220,19 @@ function errorMessage(cause: unknown): string {
     : "An unexpected error occurred.";
 }
 
-function onSubmit() {
+async function revealFeedback() {
+  await nextTick();
+  if (window.matchMedia("(max-width: 1023px)").matches) {
+    feedback.value?.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function jumpToOutput() {
+  outputHeading.value?.focus();
+  outputHeading.value?.scrollIntoView({ block: "start" });
+}
+
+async function onSubmit() {
   clearResult();
 
   try {
@@ -239,6 +257,8 @@ function onSubmit() {
   } catch (cause) {
     error.value = errorMessage(cause);
   }
+
+  await revealFeedback();
 }
 
 function setInput(input: string, filename = "") {
@@ -264,6 +284,7 @@ async function uploadFile(event: Event) {
     setInput(await file.text(), file.name);
   } catch (cause) {
     error.value = `Could not read the file: ${errorMessage(cause)}`;
+    await revealFeedback();
   } finally {
     readingFile.value = false;
   }
@@ -274,11 +295,11 @@ async function copyOutput() {
 
   try {
     await navigator.clipboard.writeText(output.value);
-    statusColor.value = "success";
-    status.value = "Converted data copied to clipboard.";
+    actionColor.value = "success";
+    actionStatus.value = "Converted data copied to clipboard.";
   } catch {
-    statusColor.value = "warning";
-    status.value =
+    actionColor.value = "warning";
+    actionStatus.value =
       "Could not copy automatically. Select and copy the output manually.";
   }
 }
@@ -303,8 +324,8 @@ function downloadOutput() {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  statusColor.value = "success";
-  status.value = "Download started.";
+  actionColor.value = "success";
+  actionStatus.value = "Download started.";
 }
 
 const help: AccordionItem[] = [
@@ -437,6 +458,66 @@ const help: AccordionItem[] = [
             />
           </div>
         </UCard>
+
+        <div
+          ref="feedback"
+          class="scroll-mt-24 space-y-3"
+          :class="{ 'sr-only': !error && !status && !warnings.length }"
+        >
+          <UAlert
+            v-if="error"
+            role="alert"
+            color="error"
+            variant="subtle"
+            icon="i-heroicons-exclamation-circle"
+            title="Conversion failed"
+            :description="error"
+          />
+
+          <UAlert
+            v-if="warnings.length"
+            color="warning"
+            variant="subtle"
+            icon="i-heroicons-exclamation-triangle"
+            title="Conversion warnings"
+          >
+            <template #description>
+              <ul class="list-disc space-y-1 ps-4">
+                <li v-for="(warning, index) in warnings" :key="index">
+                  {{ warning.path }}: {{ warning.message }}
+                </li>
+              </ul>
+            </template>
+          </UAlert>
+
+          <div
+            role="status"
+            aria-label="Conversion status"
+            :class="{ 'sr-only': !status }"
+          >
+            <UAlert
+              v-if="status"
+              :color="statusColor"
+              variant="subtle"
+              :icon="
+                statusColor === 'success'
+                  ? 'i-heroicons-check-circle'
+                  : 'i-heroicons-exclamation-triangle'
+              "
+              :title="status"
+            />
+          </div>
+          <UButton
+            v-if="output"
+            type="button"
+            label="View converted output"
+            trailing-icon="i-heroicons-arrow-down"
+            color="neutral"
+            variant="outline"
+            class="lg:hidden"
+            @click="jumpToOutput"
+          />
+        </div>
 
         <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <UCard
@@ -571,7 +652,9 @@ const help: AccordionItem[] = [
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <h2
                   id="converter-output-heading"
-                  class="font-serif text-2xl font-semibold text-highlighted"
+                  ref="outputHeading"
+                  tabindex="-1"
+                  class="scroll-mt-24 font-serif text-2xl font-semibold text-highlighted"
                 >
                   Output
                 </h2>
@@ -621,43 +704,17 @@ const help: AccordionItem[] = [
             </div>
           </UCard>
         </div>
-        <UAlert
-          v-if="error"
-          role="alert"
-          color="error"
-          variant="subtle"
-          icon="i-heroicons-exclamation-circle"
-          title="Conversion failed"
-          :description="error"
-        />
-
-        <UAlert
-          v-if="warnings.length"
-          color="warning"
-          variant="subtle"
-          icon="i-heroicons-exclamation-triangle"
-          title="Conversion warnings"
-        >
-          <template #description>
-            <ul class="list-disc space-y-1 ps-4">
-              <li v-for="(warning, index) in warnings" :key="index">
-                {{ warning.path }}: {{ warning.message }}
-              </li>
-            </ul>
-          </template>
-        </UAlert>
-
-        <div role="status" :class="{ 'sr-only': !status }">
+        <div role="status" :class="{ 'sr-only': !actionStatus }">
           <UAlert
-            v-if="status"
-            :color="statusColor"
+            v-if="actionStatus"
+            :color="actionColor"
             variant="subtle"
             :icon="
-              statusColor === 'success'
+              actionColor === 'success'
                 ? 'i-heroicons-check-circle'
                 : 'i-heroicons-exclamation-triangle'
             "
-            :title="status"
+            :title="actionStatus"
           />
         </div>
       </UForm>
