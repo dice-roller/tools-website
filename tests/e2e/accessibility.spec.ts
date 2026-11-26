@@ -145,6 +145,14 @@ for (const mode of ["light", "dark"] as const) {
       await page.keyboard.press("Escape");
       await expect(select).toBeFocused();
 
+      const inputEncoding = page.getByLabel("Input encoding", { exact: true });
+      await inputEncoding.focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("option", { name: "Base64" })).toBeVisible();
+      await audit(page);
+      await page.keyboard.press("Escape");
+      await expect(inputEncoding).toBeFocused();
+
       const options = page.getByRole("button", {
         name: "Supported formats and conversion options",
       });
@@ -187,8 +195,8 @@ test("converter preview is reachable from the homepage", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Copy" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Download" })).toBeDisabled();
   await expect(
-    page.getByRole("textbox", { name: "Input encoding" }),
-  ).toHaveValue("Auto-detect");
+    page.getByLabel("Input encoding", { exact: true }),
+  ).toContainText("Auto-detect");
   await expect(
     page.getByRole("textbox", { name: "Data to convert" }),
   ).toBeEditable();
@@ -197,4 +205,63 @@ test("converter preview is reachable from the homepage", async ({ page }) => {
   await strict.focus();
   await page.keyboard.press("Space");
   await expect(strict).not.toBeChecked();
+});
+
+test("converter selectors use library capabilities", async ({ page }) => {
+  await page.goto("/converter");
+  const source = page.getByLabel("Source version", { exact: true });
+  const target = page.getByLabel("Target version", { exact: true });
+  const format = page.getByLabel("Output format", { exact: true });
+  const encoding = page.getByLabel("Encoding", { exact: true });
+  const menu = (name: string) =>
+    page.getByRole("listbox", { name, exact: true });
+  const option = (field: string, name: string) =>
+    menu(field).getByRole("option", { name, exact: true });
+
+  await expect(target).toContainText("Schema 1 (v6)");
+  await format.click();
+  await option("Output format", "Concise").click();
+  await expect(format).toContainText("Concise");
+  await expect(menu("Output format")).toBeHidden();
+
+  await source.click();
+  await option("Source version", "Legacy (v5)").click();
+  await expect(menu("Source version")).toBeHidden();
+  await target.click();
+  await option("Target version", "Legacy (v5)").click();
+  await expect(menu("Target version")).toBeHidden();
+  await expect(format).toContainText("Full");
+  await format.click();
+  await expect(menu("Output format")).toBeVisible();
+  await expect(option("Output format", "Full")).toBeVisible();
+  await expect(option("Output format", "Concise")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu("Output format")).toBeHidden();
+
+  await source.click();
+  await option("Source version", "Schema 1 (v6)").click();
+  await expect(menu("Source version")).toBeHidden();
+  await expect(target).toContainText("Schema 1 (v6)");
+  await target.click();
+  await expect(option("Target version", "Latest supported")).toBeVisible();
+  await expect(option("Target version", "Legacy (v5)")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu("Target version")).toBeHidden();
+
+  await encoding.click();
+  await expect(option("Encoding", "JSON")).toBeVisible();
+  await expect(option("Encoding", "Base64")).toBeVisible();
+  await expect(option("Encoding", "Object")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu("Encoding")).toBeHidden();
+
+  const inputEncoding = page.getByLabel("Input encoding", { exact: true });
+  await expect(inputEncoding).toContainText("Auto-detect");
+  await inputEncoding.click();
+  await expect(option("Input encoding", "Auto-detect")).toBeVisible();
+  await expect(option("Input encoding", "JSON")).toBeVisible();
+  await expect(option("Input encoding", "Object")).toHaveCount(0);
+  await option("Input encoding", "Base64").click();
+  await expect(inputEncoding).toContainText("Base64");
+  await expect(encoding).toContainText("JSON");
 });

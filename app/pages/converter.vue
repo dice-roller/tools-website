@@ -1,4 +1,16 @@
 <script setup lang="ts">
+import {
+  getSupportedFormats,
+  getSupportedTargetVersions,
+  getSupportedVersions,
+  supportedEncodings,
+} from "@dice-roller/convertor";
+import type {
+  DataVersion,
+  ResultFormat,
+  SupportedDataVersion,
+  TargetVersion,
+} from "@dice-roller/convertor";
 import type { AccordionItem, BreadcrumbItem } from "@nuxt/ui";
 
 definePageMeta({ toolArtwork: true });
@@ -14,28 +26,84 @@ const breadcrumbs: BreadcrumbItem[] = [
   { label: "Converter" },
 ];
 
+function versionLabel(version: DataVersion): string {
+  switch (version) {
+    case "legacy":
+      return "Legacy (v5)";
+    case 1:
+      return "Schema 1 (v6)";
+    default:
+      return `Schema ${version}`;
+  }
+}
+
+const supportedVersions = getSupportedVersions();
+const latestVersion = Math.max(
+  ...supportedVersions.filter((version) => typeof version === "number"),
+);
 const sourceVersions = [
-  { label: "Auto-detect", value: "auto" },
-  { label: "Legacy (v5)", value: "legacy" },
-  { label: "Schema 1 (v6)", value: "1" },
-];
-const targetVersions = [
-  { label: "Schema 1 (v6)", value: "1" },
-  { label: "Latest supported", value: "latest" },
-];
-const formats = [
-  { label: "Full", value: "full" },
-  { label: "Concise", value: "concise" },
-];
-const encodings = [
-  { label: "JSON", value: "json" },
-  { label: "Base64", value: "base64" },
+  { label: "Auto-detect", value: "auto" as const },
+  ...supportedVersions.map((version) => ({
+    label: versionLabel(version),
+    value: version,
+  })),
 ];
 
-const sourceVersion = ref("auto");
-const targetVersion = ref("1");
-const format = ref("full");
-const encoding = ref("json");
+const sourceVersion = ref<SupportedDataVersion | "auto">("auto");
+const targetVersion = ref<TargetVersion>(latestVersion);
+const format = ref<ResultFormat>("full");
+const encoding = ref<"json" | "base64">("json");
+const inputEncoding = ref<"auto" | "json" | "base64">("auto");
+
+const targetVersions = computed(() => {
+  const versions = getSupportedTargetVersions(
+    sourceVersion.value === "auto" ? undefined : sourceVersion.value,
+  );
+  const items: { label: string; value: TargetVersion }[] = versions.map(
+    (version) => ({ label: versionLabel(version), value: version }),
+  );
+
+  if (versions.some((version) => version === latestVersion)) {
+    items.push({ label: "Latest supported", value: "latest" });
+  }
+
+  return items;
+});
+
+const formats = computed(() =>
+  getSupportedFormats(targetVersion.value).map((value) => ({
+    label: value.charAt(0).toUpperCase() + value.slice(1),
+    value,
+  })),
+);
+
+const encodings = supportedEncodings
+  .filter((value) => value !== "object")
+  .map((value) => ({
+    label: value === "base64" ? "Base64" : value.toUpperCase(),
+    value,
+  }));
+
+const inputEncodings = [
+  { label: "Auto-detect", value: "auto" as const },
+  ...encodings,
+];
+
+watch(targetVersions, (items) => {
+  if (!items.some((item) => item.value === targetVersion.value)) {
+    targetVersion.value =
+      items.find((item) => item.value === latestVersion)?.value ??
+      items[0]?.value ??
+      "latest";
+  }
+});
+
+watch(formats, (items) => {
+  if (!items.some((item) => item.value === format.value)) {
+    format.value = "full";
+  }
+});
+
 const strict = ref(true);
 const input = ref("");
 
@@ -66,6 +134,7 @@ const help: AccordionItem[] = [
         <h2 id="conversion-options-heading" class="sr-only">
           Conversion options
         </h2>
+
         <div
           class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]"
         >
@@ -79,6 +148,7 @@ const help: AccordionItem[] = [
               class="w-full"
             />
           </UFormField>
+
           <UFormField name="format" label="Output format">
             <USelectMenu
               v-model="format"
@@ -89,6 +159,7 @@ const help: AccordionItem[] = [
               class="w-full"
             />
           </UFormField>
+
           <UFormField name="encoding" label="Encoding">
             <USelectMenu
               v-model="encoding"
@@ -99,6 +170,7 @@ const help: AccordionItem[] = [
               class="w-full"
             />
           </UFormField>
+
           <USwitch
             v-model="strict"
             label="Strict conversion"
@@ -106,6 +178,7 @@ const help: AccordionItem[] = [
             class="min-h-10 items-center"
             :ui="{ base: 'motion-reduce:transition-none' }"
           />
+
           <UButton
             label="Convert data"
             icon="i-heroicons-arrows-right-left"
@@ -130,6 +203,7 @@ const help: AccordionItem[] = [
               >
                 Input
               </h2>
+
               <div class="flex flex-wrap gap-2">
                 <UButton
                   label="Upload file"
@@ -138,6 +212,7 @@ const help: AccordionItem[] = [
                   variant="outline"
                   disabled
                 />
+
                 <UButton
                   label="Load example"
                   icon="i-lucide-flask-conical"
@@ -173,10 +248,13 @@ const help: AccordionItem[] = [
                   class="w-full"
                 />
               </UFormField>
+
               <UFormField name="input-encoding" label="Input encoding">
-                <UInput
-                  model-value="Auto-detect"
-                  readonly
+                <USelectMenu
+                  v-model="inputEncoding"
+                  :items="inputEncodings"
+                  value-key="value"
+                  :search-input="false"
                   size="lg"
                   class="w-full"
                 />
@@ -199,6 +277,7 @@ const help: AccordionItem[] = [
               >
                 Output
               </h2>
+
               <div class="flex flex-wrap gap-2">
                 <UButton
                   label="Copy"
@@ -207,6 +286,7 @@ const help: AccordionItem[] = [
                   variant="outline"
                   disabled
                 />
+
                 <UButton
                   label="Download"
                   icon="i-lucide-download"
@@ -244,11 +324,14 @@ const help: AccordionItem[] = [
           <template #body>
             <p>
               Legacy (v5) exports and version 1 (v6) exports can be supplied as
-              JSON or Base64. The input encoding is detected automatically.
+              JSON or Base64. The input encoding defaults to Auto-detect, or you
+              can select it explicitly.
             </p>
             <p>
-              Convert to schema version 1, or select the latest supported
-              schema. Reverse migrations to legacy are not supported.
+              Select a target schema, or choose the latest supported version.
+              Available targets depend on the selected source version. Legacy
+              output is supported for re-encoding legacy data, but reverse
+              migrations to legacy are not supported.
             </p>
             <p>
               Full output preserves historical statistics and supports
