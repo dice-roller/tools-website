@@ -362,3 +362,29 @@ test("converter links to its library and installation instructions", async ({
     "https://www.npmjs.com/package/@dice-roller/convertor",
   );
 });
+
+test("documentation links use the configured base URL", async ({ page }) => {
+  const url =
+    process.env.NUXT_PUBLIC_DOCUMENTATION_BASE_URL ??
+    "https://dice-roller.github.io/documentation/";
+  await openHomepage(page, "light");
+  await expect(
+    page.getByRole("link", { name: "Read the docs", exact: true }),
+  ).toHaveAttribute("href", url);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("link", {
+        name: "Documentation",
+      }),
+  ).toHaveAttribute("href", url);
+  await expect(
+    page.getByRole("contentinfo").getByRole("link", { name: "Documentation" }),
+  ).toHaveAttribute("href", url);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("button", { name: "Open menu", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByRole("link", { name: "Documentation" }),
+  ).toHaveAttribute("href", url);
+});

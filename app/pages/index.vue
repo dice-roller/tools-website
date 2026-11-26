@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { ButtonProps } from "@nuxt/ui";
-import { documentationUrl, tools } from "~/data/tools";
+import { tools } from "~/data/tools";
+
+const documentationUrl = useRuntimeConfig().public.documentationBaseUrl;
 
 useSeoMeta({
   title: "Dice Roller Tools",

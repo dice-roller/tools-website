@@ -6,6 +6,7 @@ This website provides browser-based tools for RPG Dice Roller. It uses Nuxt 4, V
 
 - Always use existing Nuxt UI components when a suitable component is available. Check the [Nuxt UI component catalogue](https://ui.nuxt.com/docs/components) and the installed version before implementing a control or layout. Only build custom components when the library cannot meet the requirements; compose Nuxt UI components or use native HTML where appropriate.
 - Use Nuxt conventions for pages, layouts, components and composables. Keep the site compatible with static generation and both root and repository base paths.
+- Use `useRuntimeConfig().public.documentationBaseUrl` for documentation website links. Do not hard-code the documentation host in application components; keep repository and npm links separate.
 - Use semantic Nuxt UI colour tokens and existing theme settings instead of hard-coded colours. Keep theme changes centralised.
 - Consult the [Dice Roller documentation](https://dice-roller.github.io/documentation/) and [library source](https://github.com/dice-roller/rpg-dice-roller) when working on dice notation, results or conversion.
 

@@ -20,6 +20,14 @@ npm run preview
 
 The static production website is generated in `.output/public/`. The GitHub Pages preset is configured in Nuxt; no Node.js server is needed in production.
 
+## Configuration
+
+The documentation base URL is defined in Nuxt's public runtime configuration. By default, it points to `https://dice-roller.github.io/documentation/`.
+
+Override it with `NUXT_PUBLIC_DOCUMENTATION_BASE_URL` in your environment or local `.env` file (see `.env.example`). Include the trailing slash, particularly when the documentation is hosted under a path.
+
+For GitHub Pages, set a repository Actions variable named `NUXT_PUBLIC_DOCUMENTATION_BASE_URL` to change the URL used during generation. For Vercel previews, set the same environment variable in the project settings. Since the site is statically generated, changing the value requires a new build and deployment.
+
 ## Structure and routing
 
 - `app/app.vue`: the application entry, wrapped in Nuxt UI's `UApp` provider.

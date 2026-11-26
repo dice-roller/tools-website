@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from "@nuxt/ui";
-import { documentationUrl, repositoryUrl, tools } from "~/data/tools";
+import { repositoryUrl, tools } from "~/data/tools";
+
+const documentationUrl = useRuntimeConfig().public.documentationBaseUrl;
 
 const route = useRoute();
 const showToolArtwork = computed(() => route.meta.toolArtwork === true);

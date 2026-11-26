@@ -17,6 +17,11 @@ export default defineConfig({
     command:
       "npm run generate && http-server .output/public -a 127.0.0.1 -p 4173 -c-1",
     url: baseURL,
+    env: {
+      NUXT_PUBLIC_DOCUMENTATION_BASE_URL:
+        process.env.NUXT_PUBLIC_DOCUMENTATION_BASE_URL ??
+        "https://dice-roller.github.io/documentation/",
+    },
     timeout: 180_000,
     reuseExistingServer: false,
   },
