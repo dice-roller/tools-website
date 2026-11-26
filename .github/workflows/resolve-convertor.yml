@@ -1,0 +1,23 @@
+name: Resolve converter dependency
+
+on:
+  pull_request:
+    branches: [feature/converter-layout]
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    if: github.head_ref == 'chore/resolve-convertor-dependency' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: npm install --package-lock-only --ignore-scripts --save-exact @dice-roller/convertor@1.0.0-alpha.0
+      - name: Show dependency changes
+        run: git diff -- package.json package-lock.json
