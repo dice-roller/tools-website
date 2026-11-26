@@ -8,6 +8,7 @@ import {
 import type {
   DataVersion,
   ResultFormat,
+  SupportedDataVersion,
   TargetVersion,
 } from "@dice-roller/convertor";
 import type { AccordionItem, BreadcrumbItem } from "@nuxt/ui";
@@ -48,7 +49,7 @@ const sourceVersions = [
   })),
 ];
 
-const sourceVersion = ref<DataVersion | "auto">("auto");
+const sourceVersion = ref<SupportedDataVersion | "auto">("auto");
 const targetVersion = ref<TargetVersion>(latestVersion);
 const format = ref<ResultFormat>("full");
 const encoding = ref<"json" | "base64">("json");
