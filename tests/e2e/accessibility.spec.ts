@@ -214,13 +214,11 @@ test("converter preview is reachable from the homepage", async ({ page }) => {
   ).toHaveAttribute("type", "submit");
   await expect(
     page.getByRole("button", { name: "Convert data" }),
-  ).toBeDisabled();
-  await expect(
-    page.getByRole("button", { name: "Upload file" }),
-  ).toBeDisabled();
+  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Upload file" })).toBeEnabled();
   await expect(
     page.getByRole("button", { name: "Load example" }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await expect(page.getByRole("button", { name: "Copy" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Download" })).toBeDisabled();
   await expect(

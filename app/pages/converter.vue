@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import {
+  convert,
   getSupportedFormats,
   getSupportedTargetVersions,
   getSupportedVersions,
   supportedEncodings,
 } from "@dice-roller/convertor";
 import type {
+  ConversionWarning,
   DataVersion,
   ResultFormat,
   SupportedDataVersion,
   TargetVersion,
 } from "@dice-roller/convertor";
-import type { AccordionItem, BreadcrumbItem } from "@nuxt/ui";
+import type { AccordionItem, BreadcrumbItem, FormError } from "@nuxt/ui";
+import { legacyExample } from "~/data/converter-example";
 
 definePageMeta({ toolArtwork: true });
 
@@ -118,6 +121,133 @@ watch(formats, (items) => {
   }
 });
 
+const output = ref("");
+const warnings = ref<ConversionWarning[]>([]);
+const error = ref("");
+const status = ref("");
+const fileInput = ref<HTMLInputElement | null>(null);
+const readingFile = ref(false);
+
+function clearResult() {
+  output.value = "";
+  warnings.value = [];
+  error.value = "";
+  status.value = "";
+}
+
+watch(state, clearResult);
+
+function validate(): FormError[] {
+  const input = state.input.trim();
+  if (!input) {
+    return [
+      { name: "input", message: "Enter some exported dice roller data." },
+    ];
+  }
+
+  // The library detects encoding itself. Explicit choices constrain what
+  // we pass to it, without decoding or changing legacy Base64 text.
+  if (state.inputEncoding === "json" && !input.startsWith("{")) {
+    return [{ name: "input", message: "Expected a JSON export object." }];
+  }
+
+  if (
+    state.inputEncoding === "base64" &&
+    (input.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(input))
+  ) {
+    return [{ name: "input", message: "Expected Base64-encoded export data." }];
+  }
+
+  return [];
+}
+
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error
+    ? cause.message
+    : "An unexpected error occurred.";
+}
+
+function onSubmit() {
+  clearResult();
+
+  try {
+    const collectedWarnings: ConversionWarning[] = [];
+    const result = convert(state.input.trim(), state.targetVersion, {
+      from: state.sourceVersion === "auto" ? undefined : state.sourceVersion,
+      format: state.format,
+      encoding: state.encoding,
+      strict: state.strict,
+      onWarning: (warning) => collectedWarnings.push(warning),
+    });
+
+    output.value =
+      state.encoding === "json"
+        ? JSON.stringify(JSON.parse(result), null, 2)
+        : result;
+    warnings.value = collectedWarnings;
+    status.value = "Conversion complete.";
+  } catch (cause) {
+    error.value = errorMessage(cause);
+  }
+}
+
+function setInput(input: string) {
+  clearResult();
+  state.input = input;
+  state.sourceVersion = "auto";
+  state.inputEncoding = "auto";
+}
+
+function loadExample() {
+  setInput(JSON.stringify(legacyExample, null, 2));
+}
+
+async function uploadFile(event: Event) {
+  const element = event.target as HTMLInputElement;
+  const file = element.files?.[0];
+  element.value = "";
+  if (!file) return;
+
+  readingFile.value = true;
+  try {
+    setInput(await file.text());
+  } catch (cause) {
+    error.value = `Could not read the file: ${errorMessage(cause)}`;
+  } finally {
+    readingFile.value = false;
+  }
+}
+
+async function copyOutput() {
+  if (!output.value) return;
+
+  try {
+    await navigator.clipboard.writeText(output.value);
+    status.value = "Converted data copied to clipboard.";
+  } catch {
+    status.value =
+      "Could not copy automatically. Select and copy the output manually.";
+  }
+}
+
+function downloadOutput() {
+  if (!output.value) return;
+
+  const json = state.encoding === "json";
+  const blob = new Blob([output.value], {
+    type: json ? "application/json" : "text/plain;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = json ? "converted-roll.json" : "converted-roll.txt";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  status.value = "Download started.";
+}
+
 const help: AccordionItem[] = [
   { label: "Supported formats and conversion options", value: "formats" },
 ];
@@ -143,8 +273,10 @@ const help: AccordionItem[] = [
     <div class="space-y-6">
       <UForm
         :state="state"
+        :validate="validate"
         aria-labelledby="conversion-options-heading"
         class="space-y-6"
+        @submit="onSubmit"
       >
         <UCard as="section" aria-labelledby="conversion-options-heading">
           <h2 id="conversion-options-heading" class="sr-only">
@@ -240,7 +372,7 @@ const help: AccordionItem[] = [
               label="Convert data"
               icon="i-heroicons-arrows-right-left"
               size="xl"
-              disabled
+              :disabled="readingFile"
               class="justify-center sm:col-span-2 lg:col-span-1"
             />
           </div>
@@ -268,7 +400,9 @@ const help: AccordionItem[] = [
                     icon="i-heroicons-arrow-up-tray"
                     color="neutral"
                     variant="outline"
-                    disabled
+                    :disabled="readingFile"
+                    :loading="readingFile"
+                    @click="fileInput?.click()"
                   />
 
                   <UButton
@@ -277,11 +411,20 @@ const help: AccordionItem[] = [
                     icon="i-lucide-flask-conical"
                     color="neutral"
                     variant="outline"
-                    disabled
+                    :disabled="readingFile"
+                    @click="loadExample"
                   />
                 </div>
               </div>
             </template>
+
+            <input
+              ref="fileInput"
+              type="file"
+              accept=".json,.txt,.base64,application/json,text/plain"
+              hidden
+              @change="uploadFile"
+            />
 
             <div class="space-y-4">
               <UFormField
@@ -298,6 +441,7 @@ const help: AccordionItem[] = [
 
                 <UTextarea
                   v-model="state.input"
+                  :disabled="readingFile"
                   placeholder="Paste your JSON or Base64 export here…"
                   :rows="9"
                   class="w-full font-mono"
@@ -377,7 +521,8 @@ const help: AccordionItem[] = [
                     icon="i-heroicons-clipboard"
                     color="neutral"
                     variant="outline"
-                    disabled
+                    :disabled="!output"
+                    @click="copyOutput"
                   />
 
                   <UButton
@@ -386,13 +531,25 @@ const help: AccordionItem[] = [
                     icon="i-lucide-download"
                     color="neutral"
                     variant="outline"
-                    disabled
+                    :disabled="!output"
+                    @click="downloadOutput"
                   />
                 </div>
               </div>
             </template>
 
+            <UTextarea
+              v-if="output"
+              :model-value="output"
+              aria-label="Converted data"
+              readonly
+              :rows="9"
+              class="w-full flex-1 font-mono"
+              :ui="{ base: 'min-h-64 resize-y' }"
+              spellcheck="false"
+            />
             <UEmpty
+              v-else
               icon="i-heroicons-document"
               description="Your converted data will appear here."
               variant="subtle"
@@ -401,6 +558,35 @@ const help: AccordionItem[] = [
             />
           </UCard>
         </div>
+        <UAlert
+          v-if="error"
+          role="alert"
+          color="error"
+          variant="subtle"
+          icon="i-heroicons-exclamation-circle"
+          title="Conversion failed"
+          :description="error"
+        />
+
+        <UAlert
+          v-if="warnings.length"
+          color="warning"
+          variant="subtle"
+          icon="i-heroicons-exclamation-triangle"
+          title="Conversion warnings"
+        >
+          <template #description>
+            <ul class="list-disc space-y-1 ps-4">
+              <li v-for="(warning, index) in warnings" :key="index">
+                {{ warning.path }}: {{ warning.message }}
+              </li>
+            </ul>
+          </template>
+        </UAlert>
+
+        <p role="status" :class="status ? 'text-sm text-muted' : 'sr-only'">
+          {{ status }}
+        </p>
       </UForm>
 
       <UAlert
@@ -408,7 +594,6 @@ const help: AccordionItem[] = [
         variant="subtle"
         icon="i-heroicons-shield-check"
         title="Conversion runs locally. No data is uploaded."
-        description="The converter interface is a preview; conversion, file upload and output actions are not yet available."
       />
 
       <UCard :ui="{ body: 'py-0 sm:py-0' }">
