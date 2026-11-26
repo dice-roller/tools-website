@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { legacyExample } from "../../app/data/converter-example";
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
@@ -66,6 +67,9 @@ for (const mode of ["light", "dark"] as const) {
       await page.keyboard.press("Enter");
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await expect(
+        page.getByRole("link", { name: "Data converter", exact: true }),
+      ).toBeVisible();
+      await expect(
         page.getByRole("link", { name: /AST explorer/ }),
       ).toBeVisible();
       await audit(page);
@@ -83,6 +87,9 @@ for (const mode of ["light", "dark"] as const) {
         .click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
+      await expect(
+        dialog.getByRole("link", { name: "Data converter", exact: true }),
+      ).toBeVisible();
       await expect(
         dialog.getByRole("link", { name: "AST explorer" }),
       ).toBeVisible();
@@ -119,4 +126,320 @@ test("homepage reflows at a narrow viewport", async ({ page }) => {
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(320);
+});
+
+for (const mode of ["light", "dark"] as const) {
+  test.describe(`converter in ${mode} mode`, () => {
+    test("converter layout meets automated WCAG A/AA rules", async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: mode });
+      await page.goto("/converter");
+      await expect(
+        page.getByRole("heading", { name: "Data converter", exact: true }),
+      ).toBeVisible();
+      await expect(page.locator("html")).toHaveClass(new RegExp(mode));
+      await expect(
+        page.getByRole("button", { name: /switch to (light|dark) mode/i }),
+      ).toBeVisible();
+      await audit(page);
+
+      const info = page.getByRole("button", { name: "About Output format" });
+      await info.focus();
+      const tooltip = page.getByRole("tooltip");
+      await expect(tooltip).toContainText(
+        "Full preserves historical statistics",
+      );
+      await audit(page);
+      await page.keyboard.press("Escape");
+      await expect(tooltip).toBeHidden();
+      await expect(info).toBeFocused();
+
+      const select = page.getByLabel("Output format", { exact: true });
+      await select.focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("option", { name: "Concise" })).toBeVisible();
+      await audit(page);
+      await page.keyboard.press("Escape");
+      await expect(select).toBeFocused();
+
+      const inputEncoding = page.getByLabel("Input encoding", { exact: true });
+      await inputEncoding.focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("option", { name: "Base64" })).toBeVisible();
+      await audit(page);
+      await page.keyboard.press("Escape");
+      await expect(inputEncoding).toBeFocused();
+
+      const options = page.getByRole("button", {
+        name: "Supported formats and conversion options",
+      });
+      await options.focus();
+      await page.keyboard.press("Enter");
+      await expect(options).toHaveAttribute("aria-expanded", "true");
+      await audit(page);
+    });
+
+    test("conversion results and feedback meet automated WCAG rules", async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: mode });
+      await page.goto("/converter");
+      await expect(page.locator("html")).toHaveClass(new RegExp(mode));
+      const input = page.getByRole("textbox", { name: "Data to convert" });
+      const submit = page.getByRole("button", { name: "Convert data" });
+      const form = page.getByRole("form", { name: "Conversion options" });
+      // Audit the settled state, not a partially transparent animation frame.
+      await page.emulateMedia({ reducedMotion: "reduce" });
+
+      await submit.click();
+      await expect(
+        page.getByText("Enter some exported dice roller data."),
+      ).toBeVisible();
+      await audit(page);
+
+      await input.fill("{invalid");
+      await submit.click();
+      await expect(form.getByRole("alert")).toContainText("Conversion failed");
+      await audit(page);
+
+      await page.getByRole("button", { name: "Load example" }).click();
+      await submit.click();
+      await expect(
+        form.getByRole("status", { name: "Conversion status" }),
+      ).toContainText("Conversion complete.");
+      await audit(page);
+
+      await input.fill(JSON.stringify({ ...legacyExample, total: 8 }));
+      await page.getByRole("switch", { name: "Strict conversion" }).click();
+      await submit.click();
+      await expect(
+        form.getByRole("status", { name: "Conversion status" }),
+      ).toContainText("Conversion complete with warnings.");
+      await audit(page);
+    });
+
+    test("converter reflows at 320px", async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.emulateMedia({ colorScheme: mode });
+      await page.goto("/converter");
+      await expect(
+        page.getByRole("heading", { name: "Data converter", exact: true }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(320);
+      const command = page.locator("pre").filter({ hasText: "npm install" });
+      await expect(command).toBeVisible();
+      expect(
+        await command.evaluate((element) => element.scrollWidth),
+      ).toBeLessThanOrEqual(
+        await command.evaluate((element) => element.clientWidth),
+      );
+      await audit(page);
+    });
+  });
+}
+
+test("converter is reachable from the homepage", async ({ page }) => {
+  await openHomepage(page, "light");
+  const card = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "Data converter", exact: true }),
+  });
+  await expect(card).not.toContainText(/coming soon|planned|preview/i);
+  await expect(page.getByText("Planned", { exact: true })).toHaveCount(2);
+  await page
+    .getByRole("link", { name: "Open data converter", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/converter\/?$/);
+  const form = page.getByRole("form", { name: "Conversion options" });
+  await expect(form).toBeVisible();
+  for (const label of [
+    "Target version",
+    "Output format",
+    "Encoding",
+    "Data to convert",
+    "Source version",
+    "Input encoding",
+  ]) {
+    await expect(form.getByLabel(label, { exact: true })).toBeVisible();
+  }
+  await expect(
+    form.getByRole("switch", { name: "Strict conversion" }),
+  ).toBeVisible();
+  await expect(
+    form.getByRole("button", { name: "Convert data" }),
+  ).toHaveAttribute("type", "submit");
+  await expect(
+    page.getByRole("button", { name: "Convert data" }),
+  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Upload file" })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Load example" }),
+  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Copy" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Download" })).toBeDisabled();
+  await expect(
+    page.getByLabel("Input encoding", { exact: true }),
+  ).toContainText("Auto-detect");
+  await expect(
+    page.getByRole("textbox", { name: "Data to convert" }),
+  ).toBeEditable();
+  const strict = page.getByRole("switch", { name: "Strict conversion" });
+  await expect(strict).toBeChecked();
+  await strict.focus();
+  await page.keyboard.press("Space");
+  await expect(strict).not.toBeChecked();
+});
+
+test("converter selectors use library capabilities", async ({ page }) => {
+  await page.goto("/converter");
+  const source = page.getByLabel("Source version", { exact: true });
+  const target = page.getByLabel("Target version", { exact: true });
+  const format = page.getByLabel("Output format", { exact: true });
+  const encoding = page.getByLabel("Encoding", { exact: true });
+  const menu = (name: string) =>
+    page.getByRole("listbox", { name, exact: true });
+  const option = (field: string, name: string) =>
+    menu(field).getByRole("option", { name, exact: true });
+
+  await expect(target).toContainText("Schema 1 (v6)");
+  await format.click();
+  await option("Output format", "Concise").click();
+  await expect(format).toContainText("Concise");
+  await expect(menu("Output format")).toBeHidden();
+
+  await source.click();
+  await option("Source version", "Legacy (v5)").click();
+  await expect(menu("Source version")).toBeHidden();
+  await target.click();
+  await option("Target version", "Legacy (v5)").click();
+  await expect(menu("Target version")).toBeHidden();
+  await expect(format).toContainText("Full");
+  await format.click();
+  await expect(menu("Output format")).toBeVisible();
+  await expect(option("Output format", "Full")).toBeVisible();
+  await expect(option("Output format", "Concise")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu("Output format")).toBeHidden();
+
+  await source.click();
+  await option("Source version", "Schema 1 (v6)").click();
+  await expect(menu("Source version")).toBeHidden();
+  await expect(target).toContainText("Schema 1 (v6)");
+  await target.click();
+  await expect(option("Target version", "Latest supported")).toBeVisible();
+  await expect(option("Target version", "Legacy (v5)")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu("Target version")).toBeHidden();
+
+  await encoding.click();
+  await expect(option("Encoding", "JSON")).toBeVisible();
+  await expect(option("Encoding", "Base64")).toBeVisible();
+  await expect(option("Encoding", "Object")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(menu("Encoding")).toBeHidden();
+
+  const inputEncoding = page.getByLabel("Input encoding", { exact: true });
+  await expect(inputEncoding).toContainText("Auto-detect");
+  await inputEncoding.click();
+  await expect(option("Input encoding", "Auto-detect")).toBeVisible();
+  await expect(option("Input encoding", "JSON")).toBeVisible();
+  await expect(option("Input encoding", "Object")).toHaveCount(0);
+  await option("Input encoding", "Base64").click();
+  await expect(inputEncoding).toContainText("Base64");
+  await expect(encoding).toContainText("JSON");
+});
+
+test("converter field help is available without changing values", async ({
+  page,
+}) => {
+  await page.goto("/converter");
+  for (const label of [
+    "Target version",
+    "Output format",
+    "Output encoding",
+    "Strict conversion",
+    "Data to convert",
+    "Source version",
+    "Input encoding",
+  ]) {
+    await expect(
+      page.getByRole("button", { name: `About ${label}`, exact: true }),
+    ).toBeVisible();
+  }
+
+  const strict = page.getByRole("switch", { name: "Strict conversion" });
+  const info = page.getByRole("button", { name: "About Strict conversion" });
+  await expect(strict).toBeChecked();
+  await info.click();
+  await expect(page.getByRole("tooltip")).toContainText("Reject ambiguous");
+  await expect(strict).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+});
+
+test("converter links to its library and installation instructions", async ({
+  page,
+}) => {
+  await page.goto("/converter");
+  const documentationBaseUrl =
+    process.env.NUXT_PUBLIC_DOCUMENTATION_BASE_URL ??
+    "https://dice-roller.github.io/documentation/";
+  const library = page.getByRole("region", {
+    name: "Use the converter in your own project",
+  });
+  await expect(library.locator("pre code")).toHaveText(
+    "npm install @dice-roller/convertor",
+  );
+  await expect(
+    library.getByRole("link", { name: "Converter documentation" }),
+  ).toHaveAttribute(
+    "href",
+    new URL(
+      "guide/packages/converter",
+      `${documentationBaseUrl.replace(/\/+$/, "")}/`,
+    ).href,
+  );
+  await expect(
+    library.getByRole("link", { name: "View on GitHub" }),
+  ).toHaveAttribute("href", "https://github.com/dice-roller/convertor");
+});
+
+test("documentation links use the configured base URL", async ({ page }) => {
+  const url =
+    process.env.NUXT_PUBLIC_DOCUMENTATION_BASE_URL ??
+    "https://dice-roller.github.io/documentation/";
+  await openHomepage(page, "light");
+  await expect(
+    page.getByRole("link", { name: "Read the docs", exact: true }),
+  ).toHaveAttribute("href", url);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("link", {
+        name: "Documentation",
+      }),
+  ).toHaveAttribute("href", url);
+  await expect(
+    page.getByRole("contentinfo").getByRole("link", { name: "Documentation" }),
+  ).toHaveAttribute("href", url);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("button", { name: "Open menu", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByRole("link", { name: "Documentation" }),
+  ).toHaveAttribute("href", url);
+});
+
+test("shared GitHub links point to the Dice Roller organisation", async ({
+  page,
+}) => {
+  await openHomepage(page, "light");
+  await expect(
+    page.getByRole("link", { name: "Dice Roller on GitHub", exact: true }),
+  ).toHaveAttribute("href", "https://github.com/dice-roller");
+  await expect(
+    page.getByRole("contentinfo").getByRole("link", { name: "GitHub" }),
+  ).toHaveAttribute("href", "https://github.com/dice-roller");
 });

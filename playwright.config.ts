@@ -12,11 +12,23 @@ export default defineConfig({
     baseURL,
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "firefox",
+      testMatch: "**/converter.spec.ts",
+      use: { ...devices["Desktop Firefox"] },
+    },
+  ],
   webServer: {
     command:
       "npm run generate && http-server .output/public -a 127.0.0.1 -p 4173 -c-1",
     url: baseURL,
+    env: {
+      NUXT_PUBLIC_DOCUMENTATION_BASE_URL:
+        process.env.NUXT_PUBLIC_DOCUMENTATION_BASE_URL ??
+        "https://dice-roller.github.io/documentation/",
+    },
     timeout: 180_000,
     reuseExistingServer: false,
   },

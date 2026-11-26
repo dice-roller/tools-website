@@ -20,17 +20,26 @@ npm run preview
 
 The static production website is generated in `.output/public/`. The GitHub Pages preset is configured in Nuxt; no Node.js server is needed in production.
 
+## Configuration
+
+The documentation base URL is defined in Nuxt's public runtime configuration. By default, it points to `https://dice-roller.github.io/documentation/`.
+
+Override it with `NUXT_PUBLIC_DOCUMENTATION_BASE_URL` in your environment or local `.env` file (see `.env.example`). Include the trailing slash, particularly when the documentation is hosted under a path.
+
+For GitHub Pages, set a repository Actions variable named `NUXT_PUBLIC_DOCUMENTATION_BASE_URL` to change the URL used during generation. For Vercel previews, set the same environment variable in the project settings. Since the site is statically generated, changing the value requires a new build and deployment.
+
 ## Structure and routing
 
 - `app/app.vue`: the application entry, wrapped in Nuxt UI's `UApp` provider.
 - `app/layouts/default.vue`: shared site header, navigation and footer.
 - `app/pages/index.vue`: the homepage.
+- `app/pages/converter.vue`: the data converter.
 - `app/data/tools.ts`: the tool catalogue and shared external links.
 - `app/app.config.ts`: Nuxt UI semantic colours and icons.
 - `app/assets/css/main.css`: shared Tailwind CSS and Nuxt UI styles.
 - `nuxt.config.ts`: framework, module and static hosting configuration.
 
-The homepage uses Nuxt UI's Parchment preset (palette and tokens in `app/assets/css/main.css`, semantic colours and icons in `app/app.config.ts`). Fonts are bundled locally. The existing documentation logo is reused from the [documentation repository](https://github.com/dice-roller/documentation/blob/next/docs/public/dice-roller-logo.png); the current artwork derived from [Font Awesome](https://fontawesome.com/license/free) is retained pending its replacement. The hero background is a WebP-optimised copy of the [documentation artwork](https://github.com/dice-roller/documentation/blob/next/docs/.vitepress/theme/home-background.png), with a theme-aware overlay for text legibility. No individual tools are implemented yet.
+The homepage uses Nuxt UI's Parchment preset (palette and tokens in `app/assets/css/main.css`, semantic colours and icons in `app/app.config.ts`). Fonts are bundled locally. The existing documentation logo is reused from the [documentation repository](https://github.com/dice-roller/documentation/blob/next/docs/public/dice-roller-logo.png); the current artwork derived from [Font Awesome](https://fontawesome.com/license/free) is retained pending its replacement. The hero background is a WebP-optimised copy of the [documentation artwork](https://github.com/dice-roller/documentation/blob/next/docs/.vitepress/theme/home-background.png), with a theme-aware overlay for text legibility. The converter runs locally in the browser and supports file input, conversion, copying and downloading exports.
 
 Nuxt automatically creates routes from Vue files in `app/pages/`. For example, `app/pages/index.vue` becomes `/` and `app/pages/converter.vue` becomes `/converter`. Use `NuxtLink` for internal navigation. Components, layouts and composables can live in `app/components/`, `app/layouts/` and `app/composables/` respectively.
 
@@ -41,11 +50,11 @@ See the [Nuxt documentation](https://nuxt.com/docs/4.x/getting-started/introduct
 Accessibility is a core project requirement. See [CONTRIBUTING.md](CONTRIBUTING.md) for our WCAG 2.2 AA target, manual review expectations and Playwright/axe-core tests.
 
 ```sh
-npx playwright install chromium
+npx playwright install chromium firefox
 npm run test:e2e
 ```
 
-The end-to-end tests generate and serve the static website automatically.
+The end-to-end tests generate and serve the static website automatically. Chromium runs the full suite; Firefox also runs the converter's functional tests.
 
 ## Publishing
 

@@ -10,6 +10,11 @@ export default defineNuxtConfig({
       title: "Dice Roller Tools",
     },
   },
+  runtimeConfig: {
+    public: {
+      documentationBaseUrl: "https://dice-roller.github.io/documentation/",
+    },
+  },
   ui: {
     // Parchment fonts are bundled locally via Fontsource.
     fonts: false,

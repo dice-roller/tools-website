@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { ButtonProps } from "@nuxt/ui";
-import { documentationUrl, tools } from "~/data/tools";
+import { tools } from "~/data/tools";
+
+const documentationUrl = useRuntimeConfig().public.documentationBaseUrl;
 
 useSeoMeta({
   title: "Dice Roller Tools",
@@ -64,7 +66,7 @@ const links: ButtonProps[] = [
             :as="{ root: 'article', title: 'h3' }"
             :title="tool.title"
             :description="tool.description"
-            :highlight="tool.status === 'Coming soon'"
+            :highlight="!!tool.path"
             class="scroll-mt-24"
             :ui="{
               title: 'font-serif text-xl',
@@ -75,7 +77,21 @@ const links: ButtonProps[] = [
             :icon="tool.icon"
           >
             <template #footer>
-              <UBadge color="neutral" variant="subtle" :label="tool.status" />
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <UBadge
+                  v-if="tool.status"
+                  color="neutral"
+                  variant="subtle"
+                  :label="tool.status"
+                />
+                <UButton
+                  v-if="tool.path"
+                  :to="tool.path"
+                  :label="`Open ${tool.title.toLowerCase()}`"
+                  trailing-icon="i-heroicons-arrow-right"
+                  variant="link"
+                />
+              </div>
             </template>
           </UPageCard>
         </UPageGrid>

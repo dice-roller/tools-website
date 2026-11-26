@@ -3,17 +3,18 @@ export interface Tool {
   title: string;
   description: string;
   icon: string;
-  status: "Coming soon" | "Planned";
+  path?: string;
+  status?: "Coming soon" | "Planned";
 }
 
 export const tools: readonly Tool[] = [
   {
     id: "converter",
+    path: "/converter",
     title: "Data converter",
     description:
       "Convert exported rolls and histories between supported data versions and formats.",
     icon: "i-heroicons-arrows-right-left",
-    status: "Coming soon",
   },
   {
     id: "playground",
@@ -33,5 +34,4 @@ export const tools: readonly Tool[] = [
   },
 ];
 
-export const documentationUrl = "https://dice-roller.github.io/documentation/";
-export const repositoryUrl = "https://github.com/dice-roller/tools-website";
+export const githubOrganisationUrl = "https://github.com/dice-roller";

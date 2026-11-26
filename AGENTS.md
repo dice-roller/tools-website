@@ -6,8 +6,15 @@ This website provides browser-based tools for RPG Dice Roller. It uses Nuxt 4, V
 
 - Always use existing Nuxt UI components when a suitable component is available. Check the [Nuxt UI component catalogue](https://ui.nuxt.com/docs/components) and the installed version before implementing a control or layout. Only build custom components when the library cannot meet the requirements; compose Nuxt UI components or use native HTML where appropriate.
 - Use Nuxt conventions for pages, layouts, components and composables. Keep the site compatible with static generation and both root and repository base paths.
+- Use `useRuntimeConfig().public.documentationBaseUrl` for documentation website links. Do not hard-code the documentation host in application components; keep repository and npm links separate.
 - Use semantic Nuxt UI colour tokens and existing theme settings instead of hard-coded colours. Keep theme changes centralised.
 - Consult the [Dice Roller documentation](https://dice-roller.github.io/documentation/) and [library source](https://github.com/dice-roller/rpg-dice-roller) when working on dice notation, results or conversion.
+
+## Forms
+
+- Always wrap related form controls in a semantic HTML `<form>` element. Prefer Nuxt UI's `UForm` (which renders a native form for non-nested forms); `UFormField` alone is not a form. Do not nest native forms.
+- Use a shared reactive form state with field names matching its properties, and handle validation and submission through the form. Use `type="submit"` for submission buttons and `type="button"` for other actions, including help triggers, to avoid accidental submissions.
+- Keep labels associated with their controls, and test form semantics, keyboard submission and validation behaviour where applicable.
 
 ## Accessibility is a requirement
 
@@ -22,6 +29,6 @@ Games should be for everyone. Follow [CONTRIBUTING.md](CONTRIBUTING.md), and tar
 
 ## Validation
 
-Run `npm run lint`, `npm run typecheck` and `npm run test:e2e` before proposing changes. The end-to-end suite builds and serves the static website. Install Chromium using `npx playwright install chromium` if needed.
+Run `npm run lint`, `npm run typecheck` and `npm run test:e2e` before proposing changes. The end-to-end suite builds and serves the static website. Install Chromium and Firefox using `npx playwright install chromium firefox` if needed.
 
 Report failures, limitations and any checks that could not be performed. Do not claim validation that was not run.
