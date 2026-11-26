@@ -343,6 +343,9 @@ test("converter links to its library and installation instructions", async ({
   page,
 }) => {
   await page.goto("/converter");
+  const documentationBaseUrl =
+    process.env.NUXT_PUBLIC_DOCUMENTATION_BASE_URL ??
+    "https://dice-roller.github.io/documentation/";
   const library = page.getByRole("region", {
     name: "Use the converter in your own project",
   });
@@ -353,7 +356,10 @@ test("converter links to its library and installation instructions", async ({
     library.getByRole("link", { name: "Converter documentation" }),
   ).toHaveAttribute(
     "href",
-    "https://github.com/dice-roller/convertor/tree/next#readme",
+    new URL(
+      "guide/packages/converter",
+      `${documentationBaseUrl.replace(/\/+$/, "")}/`,
+    ).href,
   );
   await expect(
     library.getByRole("link", { name: "View on npm" }),

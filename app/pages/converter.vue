@@ -18,6 +18,12 @@ import { legacyExample } from "~/data/converter-example";
 
 definePageMeta({ toolArtwork: true });
 
+const { documentationBaseUrl } = useRuntimeConfig().public;
+const converterDocumentationUrl = new URL(
+  "guide/packages/converter",
+  `${documentationBaseUrl.replace(/\/+$/, "")}/`,
+).href;
+
 useSeoMeta({
   title: "Data converter · Dice Roller Tools",
   description:
@@ -666,7 +672,7 @@ const help: AccordionItem[] = [
 
           <div class="flex flex-wrap gap-2">
             <UButton
-              to="https://github.com/dice-roller/convertor/tree/next#readme"
+              :to="converterDocumentationUrl"
               target="_blank"
               label="Converter documentation"
               icon="i-lucide-book-open"
