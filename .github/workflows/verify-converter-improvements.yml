@@ -1,0 +1,29 @@
+name: Verify converter improvements
+
+on:
+  pull_request:
+    branches: [feature/converter-layout]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Format changed files and print exact diff
+        run: |
+          npx prettier --write app/pages/converter.vue tests/e2e/accessibility.spec.ts tests/e2e/converter.spec.ts playwright.config.ts README.md AGENTS.md .github/workflows/ci.yml
+          git diff -- app/pages/converter.vue tests/e2e/accessibility.spec.ts tests/e2e/converter.spec.ts playwright.config.ts README.md AGENTS.md .github/workflows/ci.yml
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npx playwright install --with-deps chromium firefox
+      - run: npm run test:e2e
+        env:
+          NUXT_PUBLIC_DOCUMENTATION_BASE_URL: https://example.com/docs/
