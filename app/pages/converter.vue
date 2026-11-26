@@ -173,6 +173,7 @@ const status = ref("");
 const statusColor = ref<"success" | "warning">("success");
 const fileInput = ref<HTMLInputElement | null>(null);
 const readingFile = ref(false);
+const uploadedFilename = ref("");
 
 function clearResult() {
   output.value = "";
@@ -241,9 +242,10 @@ function onSubmit() {
   }
 }
 
-function setInput(input: string) {
+function setInput(input: string, filename = "") {
   clearResult();
   state.input = input;
+  uploadedFilename.value = filename;
   state.sourceVersion = "auto";
   state.inputEncoding = "auto";
 }
@@ -260,7 +262,7 @@ async function uploadFile(event: Event) {
 
   readingFile.value = true;
   try {
-    setInput(await file.text());
+    setInput(await file.text(), file.name);
   } catch (cause) {
     error.value = `Could not read the file: ${errorMessage(cause)}`;
   } finally {
@@ -292,7 +294,12 @@ function downloadOutput() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = json ? "converted-roll.json" : "converted-roll.txt";
+  const stem =
+    uploadedFilename.value.replace(/\.[^.]+$/, "") || "converted-roll";
+  const target =
+    state.targetVersion === "latest" ? latestVersion : state.targetVersion;
+  const version = target === "legacy" ? "v5" : `schema-${target}`;
+  link.download = `${stem}-${version}-${state.format}.${json ? "json" : "txt"}`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -495,6 +502,7 @@ const help: AccordionItem[] = [
 
                 <UTextarea
                   v-model="state.input"
+                  @update:model-value="uploadedFilename = ''"
                   :disabled="readingFile"
                   placeholder="Paste your JSON or Base64 export here…"
                   :rows="9"

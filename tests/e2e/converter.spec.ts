@@ -29,7 +29,9 @@ test("converts a legacy export and downloads the result", async ({ page }) => {
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download" }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("converted-roll.json");
+  expect(download.suggestedFilename()).toBe(
+    "converted-roll-schema-1-full.json",
+  );
   expect(await download.failure()).toBeNull();
 
   await selectOption(page, "Output format", "Concise");
@@ -243,4 +245,43 @@ test("detects the source and restricts targets and history formats", async ({
   await expect(target).toBeDisabled();
   await input.fill("");
   await expect(target).toBeEnabled();
+});
+
+test("download names retain the uploaded stem and describe the output", async ({
+  page,
+}) => {
+  await page.goto("/converter");
+  const input = page.getByRole("textbox", { name: "Data to convert" });
+  const submit = page.getByRole("button", { name: "Convert data" });
+  const downloadButton = page.getByRole("button", { name: "Download" });
+  const source = JSON.stringify(legacyExample);
+
+  async function downloadName() {
+    const pending = page.waitForEvent("download");
+    await downloadButton.click();
+    return (await pending).suggestedFilename();
+  }
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "character.history.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(source),
+  });
+  await expect(input).toHaveValue(source);
+  await submit.click();
+  expect(await downloadName()).toBe("character.history-schema-1-full.json");
+
+  await selectOption(page, "Target version", "Latest supported");
+  await selectOption(page, "Output format", "Concise");
+  await selectOption(page, "Encoding", "Base64");
+  await submit.click();
+  expect(await downloadName()).toBe("character.history-schema-1-concise.txt");
+
+  await selectOption(page, "Target version", "Legacy (v5)");
+  await submit.click();
+  expect(await downloadName()).toBe("character.history-v5-full.txt");
+
+  await input.fill(JSON.stringify(legacyExample, null, 2));
+  await submit.click();
+  expect(await downloadName()).toBe("converted-roll-v5-full.txt");
 });
