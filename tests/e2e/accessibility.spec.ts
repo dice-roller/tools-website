@@ -194,6 +194,24 @@ test("converter preview is reachable from the homepage", async ({ page }) => {
     .getByRole("link", { name: "Preview data converter", exact: true })
     .click();
   await expect(page).toHaveURL(/\/converter\/?$/);
+  const form = page.getByRole("form", { name: "Conversion options" });
+  await expect(form).toBeVisible();
+  for (const label of [
+    "Target version",
+    "Output format",
+    "Encoding",
+    "Data to convert",
+    "Source version",
+    "Input encoding",
+  ]) {
+    await expect(form.getByLabel(label, { exact: true })).toBeVisible();
+  }
+  await expect(
+    form.getByRole("switch", { name: "Strict conversion" }),
+  ).toBeVisible();
+  await expect(
+    form.getByRole("button", { name: "Convert data" }),
+  ).toHaveAttribute("type", "submit");
   await expect(
     page.getByRole("button", { name: "Convert data" }),
   ).toBeDisabled();

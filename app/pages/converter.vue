@@ -49,15 +49,29 @@ const sourceVersions = [
   })),
 ];
 
-const sourceVersion = ref<SupportedDataVersion | "auto">("auto");
-const targetVersion = ref<TargetVersion>(latestVersion);
-const format = ref<ResultFormat>("full");
-const encoding = ref<"json" | "base64">("json");
-const inputEncoding = ref<"auto" | "json" | "base64">("auto");
+interface ConverterFormState {
+  sourceVersion: SupportedDataVersion | "auto";
+  targetVersion: TargetVersion;
+  format: ResultFormat;
+  encoding: "json" | "base64";
+  inputEncoding: "auto" | "json" | "base64";
+  strict: boolean;
+  input: string;
+}
+
+const state = reactive<ConverterFormState>({
+  sourceVersion: "auto",
+  targetVersion: latestVersion,
+  format: "full",
+  encoding: "json",
+  inputEncoding: "auto",
+  strict: true,
+  input: "",
+});
 
 const targetVersions = computed(() => {
   const versions = getSupportedTargetVersions(
-    sourceVersion.value === "auto" ? undefined : sourceVersion.value,
+    state.sourceVersion === "auto" ? undefined : state.sourceVersion,
   );
   const items: { label: string; value: TargetVersion }[] = versions.map(
     (version) => ({ label: versionLabel(version), value: version }),
@@ -71,7 +85,7 @@ const targetVersions = computed(() => {
 });
 
 const formats = computed(() =>
-  getSupportedFormats(targetVersion.value).map((value) => ({
+  getSupportedFormats(state.targetVersion).map((value) => ({
     label: value.charAt(0).toUpperCase() + value.slice(1),
     value,
   })),
@@ -90,8 +104,8 @@ const inputEncodings = [
 ];
 
 watch(targetVersions, (items) => {
-  if (!items.some((item) => item.value === targetVersion.value)) {
-    targetVersion.value =
+  if (!items.some((item) => item.value === state.targetVersion)) {
+    state.targetVersion =
       items.find((item) => item.value === latestVersion)?.value ??
       items[0]?.value ??
       "latest";
@@ -99,13 +113,10 @@ watch(targetVersions, (items) => {
 });
 
 watch(formats, (items) => {
-  if (!items.some((item) => item.value === format.value)) {
-    format.value = "full";
+  if (!items.some((item) => item.value === state.format)) {
+    state.format = "full";
   }
 });
-
-const strict = ref(true);
-const input = ref("");
 
 const help: AccordionItem[] = [
   { label: "Supported formats and conversion options", value: "formats" },
@@ -130,255 +141,267 @@ const help: AccordionItem[] = [
     </UPageHeader>
 
     <div class="space-y-6">
-      <UCard as="section" aria-labelledby="conversion-options-heading">
-        <h2 id="conversion-options-heading" class="sr-only">
-          Conversion options
-        </h2>
+      <UForm
+        :state="state"
+        aria-labelledby="conversion-options-heading"
+        class="space-y-6"
+      >
+        <UCard as="section" aria-labelledby="conversion-options-heading">
+          <h2 id="conversion-options-heading" class="sr-only">
+            Conversion options
+          </h2>
 
-        <div
-          class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]"
-        >
-          <UFormField
-            name="target"
-            label="Target version"
-            :ui="{ labelWrapper: 'justify-start' }"
+          <div
+            class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]"
           >
-            <template #hint>
-              <FieldInfo
-                label="Target version"
-                text="Choose the destination data schema. Latest supported uses the newest schema the converter knows."
-              />
-            </template>
-
-            <USelectMenu
-              v-model="targetVersion"
-              :items="targetVersions"
-              value-key="value"
-              :search-input="false"
-              size="lg"
-              class="w-full"
-            />
-          </UFormField>
-
-          <UFormField
-            name="format"
-            label="Output format"
-            :ui="{ labelWrapper: 'justify-start' }"
-          >
-            <template #hint>
-              <FieldInfo
-                label="Output format"
-                text="Full preserves historical statistics. Concise is for individual rolls and omits historical statistics."
-              />
-            </template>
-
-            <USelectMenu
-              v-model="format"
-              :items="formats"
-              value-key="value"
-              :search-input="false"
-              size="lg"
-              class="w-full"
-            />
-          </UFormField>
-
-          <UFormField
-            name="encoding"
-            label="Encoding"
-            :ui="{ labelWrapper: 'justify-start' }"
-          >
-            <template #hint>
-              <FieldInfo
-                label="Output encoding"
-                text="Choose readable JSON or Base64 for the converted output."
-              />
-            </template>
-
-            <USelectMenu
-              v-model="encoding"
-              :items="encodings"
-              value-key="value"
-              :search-input="false"
-              size="lg"
-              class="w-full"
-            />
-          </UFormField>
-
-          <div class="flex min-h-10 items-center gap-1">
-            <USwitch
-              v-model="strict"
-              label="Strict conversion"
-              size="xl"
-              class="items-center"
-              :ui="{ base: 'motion-reduce:transition-none' }"
-            />
-            <FieldInfo
-              label="Strict conversion"
-              text="Reject ambiguous or inconsistent data. Turn off to allow best-effort conversion with warnings."
-            />
-          </div>
-
-          <UButton
-            label="Convert data"
-            icon="i-heroicons-arrows-right-left"
-            size="xl"
-            disabled
-            class="justify-center sm:col-span-2 lg:col-span-1"
-          />
-        </div>
-      </UCard>
-
-      <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <UCard
-          as="section"
-          aria-labelledby="converter-input-heading"
-          class="min-w-0"
-        >
-          <template #header>
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <h2
-                id="converter-input-heading"
-                class="font-serif text-2xl font-semibold text-highlighted"
-              >
-                Input
-              </h2>
-
-              <div class="flex flex-wrap gap-2">
-                <UButton
-                  label="Upload file"
-                  icon="i-heroicons-arrow-up-tray"
-                  color="neutral"
-                  variant="outline"
-                  disabled
-                />
-
-                <UButton
-                  label="Load example"
-                  icon="i-lucide-flask-conical"
-                  color="neutral"
-                  variant="outline"
-                  disabled
-                />
-              </div>
-            </div>
-          </template>
-
-          <div class="space-y-4">
             <UFormField
-              name="input"
-              label="Data to convert"
+              name="targetVersion"
+              label="Target version"
               :ui="{ labelWrapper: 'justify-start' }"
             >
               <template #hint>
                 <FieldInfo
-                  label="Data to convert"
-                  text="Paste an exported individual roll or roll history in JSON or Base64."
+                  label="Target version"
+                  text="Choose the destination data schema. Latest supported uses the newest schema the converter knows."
                 />
               </template>
 
-              <UTextarea
-                v-model="input"
-                placeholder="Paste your JSON or Base64 export here…"
-                :rows="9"
-                class="w-full font-mono"
-                :ui="{ base: 'min-h-48 resize-y' }"
-                spellcheck="false"
-                autocapitalize="off"
+              <USelectMenu
+                v-model="state.targetVersion"
+                :items="targetVersions"
+                value-key="value"
+                :search-input="false"
+                size="lg"
+                class="w-full"
               />
             </UFormField>
 
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <UFormField
-                name="source"
-                label="Source version"
-                :ui="{ labelWrapper: 'justify-start' }"
-              >
-                <template #hint>
-                  <FieldInfo
-                    label="Source version"
-                    text="Choose the original data schema, or use Auto-detect to identify it from the export."
-                  />
-                </template>
-
-                <USelectMenu
-                  v-model="sourceVersion"
-                  :items="sourceVersions"
-                  value-key="value"
-                  :search-input="false"
-                  size="lg"
-                  class="w-full"
+            <UFormField
+              name="format"
+              label="Output format"
+              :ui="{ labelWrapper: 'justify-start' }"
+            >
+              <template #hint>
+                <FieldInfo
+                  label="Output format"
+                  text="Full preserves historical statistics. Concise is for individual rolls and omits historical statistics."
                 />
-              </UFormField>
+              </template>
 
-              <UFormField
-                name="input-encoding"
-                label="Input encoding"
-                :ui="{ labelWrapper: 'justify-start' }"
-              >
-                <template #hint>
-                  <FieldInfo
-                    label="Input encoding"
-                    text="Choose the encoding of your input, or use Auto-detect."
-                  />
-                </template>
+              <USelectMenu
+                v-model="state.format"
+                :items="formats"
+                value-key="value"
+                :search-input="false"
+                size="lg"
+                class="w-full"
+              />
+            </UFormField>
 
-                <USelectMenu
-                  v-model="inputEncoding"
-                  :items="inputEncodings"
-                  value-key="value"
-                  :search-input="false"
-                  size="lg"
-                  class="w-full"
+            <UFormField
+              name="encoding"
+              label="Encoding"
+              :ui="{ labelWrapper: 'justify-start' }"
+            >
+              <template #hint>
+                <FieldInfo
+                  label="Output encoding"
+                  text="Choose readable JSON or Base64 for the converted output."
                 />
-              </UFormField>
+              </template>
+
+              <USelectMenu
+                v-model="state.encoding"
+                :items="encodings"
+                value-key="value"
+                :search-input="false"
+                size="lg"
+                class="w-full"
+              />
+            </UFormField>
+
+            <div class="flex min-h-10 items-center gap-1">
+              <USwitch
+                v-model="state.strict"
+                name="strict"
+                label="Strict conversion"
+                size="xl"
+                class="items-center"
+                :ui="{ base: 'motion-reduce:transition-none' }"
+              />
+              <FieldInfo
+                label="Strict conversion"
+                text="Reject ambiguous or inconsistent data. Turn off to allow best-effort conversion with warnings."
+              />
             </div>
+
+            <UButton
+              type="submit"
+              label="Convert data"
+              icon="i-heroicons-arrows-right-left"
+              size="xl"
+              disabled
+              class="justify-center sm:col-span-2 lg:col-span-1"
+            />
           </div>
         </UCard>
 
-        <UCard
-          as="section"
-          aria-labelledby="converter-output-heading"
-          class="flex min-w-0 flex-col"
-          :ui="{ body: 'flex flex-1 flex-col' }"
-        >
-          <template #header>
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <h2
-                id="converter-output-heading"
-                class="font-serif text-2xl font-semibold text-highlighted"
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <UCard
+            as="section"
+            aria-labelledby="converter-input-heading"
+            class="min-w-0"
+          >
+            <template #header>
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2
+                  id="converter-input-heading"
+                  class="font-serif text-2xl font-semibold text-highlighted"
+                >
+                  Input
+                </h2>
+
+                <div class="flex flex-wrap gap-2">
+                  <UButton
+                    type="button"
+                    label="Upload file"
+                    icon="i-heroicons-arrow-up-tray"
+                    color="neutral"
+                    variant="outline"
+                    disabled
+                  />
+
+                  <UButton
+                    type="button"
+                    label="Load example"
+                    icon="i-lucide-flask-conical"
+                    color="neutral"
+                    variant="outline"
+                    disabled
+                  />
+                </div>
+              </div>
+            </template>
+
+            <div class="space-y-4">
+              <UFormField
+                name="input"
+                label="Data to convert"
+                :ui="{ labelWrapper: 'justify-start' }"
               >
-                Output
-              </h2>
+                <template #hint>
+                  <FieldInfo
+                    label="Data to convert"
+                    text="Paste an exported individual roll or roll history in JSON or Base64."
+                  />
+                </template>
 
-              <div class="flex flex-wrap gap-2">
-                <UButton
-                  label="Copy"
-                  icon="i-heroicons-clipboard"
-                  color="neutral"
-                  variant="outline"
-                  disabled
+                <UTextarea
+                  v-model="state.input"
+                  placeholder="Paste your JSON or Base64 export here…"
+                  :rows="9"
+                  class="w-full font-mono"
+                  :ui="{ base: 'min-h-48 resize-y' }"
+                  spellcheck="false"
+                  autocapitalize="off"
                 />
+              </UFormField>
 
-                <UButton
-                  label="Download"
-                  icon="i-lucide-download"
-                  color="neutral"
-                  variant="outline"
-                  disabled
-                />
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <UFormField
+                  name="sourceVersion"
+                  label="Source version"
+                  :ui="{ labelWrapper: 'justify-start' }"
+                >
+                  <template #hint>
+                    <FieldInfo
+                      label="Source version"
+                      text="Choose the original data schema, or use Auto-detect to identify it from the export."
+                    />
+                  </template>
+
+                  <USelectMenu
+                    v-model="state.sourceVersion"
+                    :items="sourceVersions"
+                    value-key="value"
+                    :search-input="false"
+                    size="lg"
+                    class="w-full"
+                  />
+                </UFormField>
+
+                <UFormField
+                  name="inputEncoding"
+                  label="Input encoding"
+                  :ui="{ labelWrapper: 'justify-start' }"
+                >
+                  <template #hint>
+                    <FieldInfo
+                      label="Input encoding"
+                      text="Choose the encoding of your input, or use Auto-detect."
+                    />
+                  </template>
+
+                  <USelectMenu
+                    v-model="state.inputEncoding"
+                    :items="inputEncodings"
+                    value-key="value"
+                    :search-input="false"
+                    size="lg"
+                    class="w-full"
+                  />
+                </UFormField>
               </div>
             </div>
-          </template>
+          </UCard>
 
-          <UEmpty
-            icon="i-heroicons-document"
-            description="Your converted data will appear here."
-            variant="subtle"
-            size="xl"
-            class="min-h-64 flex-1"
-          />
-        </UCard>
-      </div>
+          <UCard
+            as="section"
+            aria-labelledby="converter-output-heading"
+            class="flex min-w-0 flex-col"
+            :ui="{ body: 'flex flex-1 flex-col' }"
+          >
+            <template #header>
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2
+                  id="converter-output-heading"
+                  class="font-serif text-2xl font-semibold text-highlighted"
+                >
+                  Output
+                </h2>
+
+                <div class="flex flex-wrap gap-2">
+                  <UButton
+                    type="button"
+                    label="Copy"
+                    icon="i-heroicons-clipboard"
+                    color="neutral"
+                    variant="outline"
+                    disabled
+                  />
+
+                  <UButton
+                    type="button"
+                    label="Download"
+                    icon="i-lucide-download"
+                    color="neutral"
+                    variant="outline"
+                    disabled
+                  />
+                </div>
+              </div>
+            </template>
+
+            <UEmpty
+              icon="i-heroicons-document"
+              description="Your converted data will appear here."
+              variant="subtle"
+              size="xl"
+              class="min-h-64 flex-1"
+            />
+          </UCard>
+        </div>
+      </UForm>
 
       <UAlert
         color="neutral"
