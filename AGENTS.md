@@ -29,6 +29,6 @@ Games should be for everyone. Follow [CONTRIBUTING.md](CONTRIBUTING.md), and tar
 
 ## Validation
 
-Run `npm run lint`, `npm run typecheck` and `npm run test:e2e` before proposing changes. The end-to-end suite builds and serves the static website. Install Chromium using `npx playwright install chromium` if needed.
+Run `npm run lint`, `npm run typecheck` and `npm run test:e2e` before proposing changes. The end-to-end suite builds and serves the static website. Install Chromium and Firefox using `npx playwright install chromium firefox` if needed.
 
 Report failures, limitations and any checks that could not be performed. Do not claim validation that was not run.

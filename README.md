@@ -50,11 +50,11 @@ See the [Nuxt documentation](https://nuxt.com/docs/4.x/getting-started/introduct
 Accessibility is a core project requirement. See [CONTRIBUTING.md](CONTRIBUTING.md) for our WCAG 2.2 AA target, manual review expectations and Playwright/axe-core tests.
 
 ```sh
-npx playwright install chromium
+npx playwright install chromium firefox
 npm run test:e2e
 ```
 
-The end-to-end tests generate and serve the static website automatically.
+The end-to-end tests generate and serve the static website automatically. Chromium runs the full suite; Firefox also runs the converter's functional tests.
 
 ## Publishing
 

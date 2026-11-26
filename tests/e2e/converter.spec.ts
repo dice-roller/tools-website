@@ -84,8 +84,11 @@ test("validates input and recovers from conversion errors", async ({
 test("uploads Base64 data and copies converted output", async ({
   page,
   context,
+  browserName,
 }) => {
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  if (browserName === "chromium") {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  }
   await page.goto("/converter");
   const base64 = Buffer.from(JSON.stringify(legacyExample)).toString("base64");
   await page.locator('input[type="file"]').setInputFiles({
@@ -103,9 +106,13 @@ test("uploads Base64 data and copies converted output", async ({
   await expect(
     page.getByText("Converted data copied to clipboard."),
   ).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-    await output.inputValue(),
-  );
+  // Firefox requires a paste prompt to read the clipboard. The actual write
+  // is still exercised in both browsers; Chromium also verifies its contents.
+  if (browserName === "chromium") {
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      await output.inputValue(),
+    );
+  }
 });
 
 for (const width of [1280, 375]) {
@@ -314,4 +321,27 @@ test("mobile conversion feedback is visible and links to the output", async ({
   const heading = page.getByRole("heading", { name: "Output", exact: true });
   await expect(heading).toBeFocused();
   await expect(heading).toBeInViewport();
+});
+
+test("a clipboard failure leaves the output available for manual copying", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: {
+        writeText: async () => {
+          throw new DOMException("Permission denied", "NotAllowedError");
+        },
+      },
+    });
+  });
+  await page.goto("/converter");
+  await page.getByRole("button", { name: "Load example" }).click();
+  await page.getByRole("button", { name: "Convert data" }).click();
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(page.getByText(/Could not copy automatically/)).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Converted data" }),
+  ).toHaveValue(/"total": 7/);
+  await expect(page.getByRole("button", { name: "Download" })).toBeEnabled();
 });
