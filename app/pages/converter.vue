@@ -26,9 +26,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 function versionLabel(version: DataVersion): string {
-  if (version === "legacy") return "Legacy (v5)";
-  if (version === 1) return "Schema 1 (v6)";
-  return `Schema ${version}`;
+  switch (version) {
+    case "legacy":
+      return "Legacy (v5)";
+    case 1:
+      return "Schema 1 (v6)";
+    default:
+      return `Schema ${version}`;
+  }
 }
 
 const supportedVersions = getSupportedVersions();
@@ -96,7 +101,10 @@ const strict = ref(true);
 const input = ref("");
 
 const help: AccordionItem[] = [
-  { label: "Supported formats and conversion options", value: "formats" },
+  {
+    label: "Supported formats and conversion options",
+    value: "formats",
+  },
 ];
 </script>
 
@@ -122,6 +130,7 @@ const help: AccordionItem[] = [
         <h2 id="conversion-options-heading" class="sr-only">
           Conversion options
         </h2>
+
         <div
           class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]"
         >
@@ -135,6 +144,7 @@ const help: AccordionItem[] = [
               class="w-full"
             />
           </UFormField>
+
           <UFormField name="format" label="Output format">
             <USelectMenu
               v-model="format"
@@ -145,6 +155,7 @@ const help: AccordionItem[] = [
               class="w-full"
             />
           </UFormField>
+
           <UFormField name="encoding" label="Encoding">
             <USelectMenu
               v-model="encoding"
@@ -155,6 +166,7 @@ const help: AccordionItem[] = [
               class="w-full"
             />
           </UFormField>
+
           <USwitch
             v-model="strict"
             label="Strict conversion"
@@ -162,6 +174,7 @@ const help: AccordionItem[] = [
             class="min-h-10 items-center"
             :ui="{ base: 'motion-reduce:transition-none' }"
           />
+
           <UButton
             label="Convert data"
             icon="i-heroicons-arrows-right-left"
@@ -186,6 +199,7 @@ const help: AccordionItem[] = [
               >
                 Input
               </h2>
+
               <div class="flex flex-wrap gap-2">
                 <UButton
                   label="Upload file"
@@ -194,6 +208,7 @@ const help: AccordionItem[] = [
                   variant="outline"
                   disabled
                 />
+
                 <UButton
                   label="Load example"
                   icon="i-lucide-flask-conical"
@@ -229,6 +244,7 @@ const help: AccordionItem[] = [
                   class="w-full"
                 />
               </UFormField>
+
               <UFormField name="input-encoding" label="Input encoding">
                 <UInput
                   model-value="Auto-detect"
@@ -255,6 +271,7 @@ const help: AccordionItem[] = [
               >
                 Output
               </h2>
+
               <div class="flex flex-wrap gap-2">
                 <UButton
                   label="Copy"
@@ -263,6 +280,7 @@ const help: AccordionItem[] = [
                   variant="outline"
                   disabled
                 />
+
                 <UButton
                   label="Download"
                   icon="i-lucide-download"
