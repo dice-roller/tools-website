@@ -104,8 +104,8 @@ test("uploads Base64 data and copies converted output", async ({
   await expect(output).toBeVisible();
   await page.getByRole("button", { name: "Copy", exact: true }).click();
   await expect(
-    page.getByText("Converted data copied to clipboard."),
-  ).toBeVisible();
+    page.getByRole("status", { name: "Conversion status" }),
+  ).toContainText("Converted data copied to clipboard.");
   // Firefox requires a paste prompt to read the clipboard. The actual write
   // is still exercised in both browsers; Chromium also verifies its contents.
   if (browserName === "chromium") {
@@ -342,4 +342,67 @@ test("a clipboard failure leaves the output available for manual copying", async
     page.getByRole("textbox", { name: "Converted data" }),
   ).toHaveValue(/"total": 7/);
   await expect(page.getByRole("button", { name: "Download" })).toBeEnabled();
+});
+
+test("success feedback shares one location and expires without clearing output", async ({
+  page,
+}) => {
+  await page.goto("/converter");
+  await page.clock.install();
+  await page.getByRole("button", { name: "Load example" }).click();
+  await page.getByRole("button", { name: "Convert data" }).click();
+  const status = page.getByRole("status", { name: "Conversion status" });
+  const output = page.getByRole("textbox", { name: "Converted data" });
+  await expect(status).toContainText("Conversion complete.");
+
+  await page.clock.fastForward(3000);
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download" }).click();
+  await pending;
+  await expect(status).toContainText("Download started.");
+  await expect(
+    page.getByText("Conversion complete.", { exact: true }),
+  ).toHaveCount(0);
+
+  await page.clock.fastForward(3000);
+  await expect(status).toContainText("Download started.");
+  await page.clock.fastForward(2500);
+  await expect(status).toBeEmpty();
+  await expect(output).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Convert data" }).click();
+  await expect(status).toContainText("Conversion complete.");
+  await page.clock.fastForward(5500);
+  await expect(status).toBeEmpty();
+  await expect(output).toBeVisible();
+});
+
+test("conversion errors and detailed warnings persist until the input changes", async ({
+  page,
+}) => {
+  await page.goto("/converter");
+  await page.clock.install();
+  const input = page.getByRole("textbox", { name: "Data to convert" });
+  const submit = page.getByRole("button", { name: "Convert data" });
+  await input.fill("{invalid");
+  await submit.click();
+  const error = page.getByRole("alert");
+  await expect(error).toContainText("Conversion failed");
+  await page.clock.fastForward(10000);
+  await expect(error).toBeVisible();
+
+  await input.fill(JSON.stringify({ ...legacyExample, total: 8 }));
+  await expect(error).toHaveCount(0);
+  await page.getByRole("switch", { name: "Strict conversion" }).click();
+  await submit.click();
+  const warnings = page.getByText("Conversion warnings", { exact: true });
+  await expect(warnings).toBeVisible();
+  await page.clock.fastForward(10000);
+  await expect(warnings).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Conversion status" }),
+  ).toBeEmpty();
+  await input.fill(JSON.stringify(legacyExample));
+  await expect(warnings).toHaveCount(0);
 });

@@ -175,22 +175,41 @@ const warnings = ref<ConversionWarning[]>([]);
 const error = ref("");
 const status = ref("");
 const statusColor = ref<"success" | "warning">("success");
-const actionStatus = ref("");
-const actionColor = ref<"success" | "warning">("success");
+const statusDuration = 5000;
+let statusTimer: ReturnType<typeof setTimeout> | undefined;
 const feedback = ref<HTMLElement | null>(null);
 const outputHeading = ref<HTMLElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const readingFile = ref(false);
 const uploadedFilename = ref("");
 
+function clearStatus() {
+  clearTimeout(statusTimer);
+  statusTimer = undefined;
+  status.value = "";
+  statusColor.value = "success";
+}
+
+function showStatus(
+  message: string,
+  color: "success" | "warning" = "success",
+  persistent = false,
+) {
+  clearStatus();
+  status.value = message;
+  statusColor.value = color;
+  if (!persistent) {
+    statusTimer = setTimeout(clearStatus, statusDuration);
+  }
+}
+
+onBeforeUnmount(clearStatus);
+
 function clearResult() {
   output.value = "";
   warnings.value = [];
   error.value = "";
-  status.value = "";
-  statusColor.value = "success";
-  actionStatus.value = "";
-  actionColor.value = "success";
+  clearStatus();
 }
 
 watch(state, clearResult);
@@ -269,10 +288,12 @@ async function onSubmit() {
         ? JSON.stringify(JSON.parse(result), null, 2)
         : result;
     warnings.value = collectedWarnings;
-    statusColor.value = collectedWarnings.length ? "warning" : "success";
-    status.value = collectedWarnings.length
-      ? "Conversion complete with warnings."
-      : "Conversion complete.";
+    showStatus(
+      collectedWarnings.length
+        ? "Conversion complete with warnings."
+        : "Conversion complete.",
+      collectedWarnings.length ? "warning" : "success",
+    );
   } catch (cause) {
     error.value = errorMessage(cause);
   }
@@ -314,16 +335,19 @@ async function copyOutput() {
 
   try {
     await navigator.clipboard.writeText(output.value);
-    actionColor.value = "success";
-    actionStatus.value = "Converted data copied to clipboard.";
+    showStatus("Converted data copied to clipboard.");
   } catch {
-    actionColor.value = "warning";
-    actionStatus.value =
-      "Could not copy automatically. Select and copy the output manually.";
+    showStatus(
+      "Could not copy automatically. Select and copy the output manually.",
+      "warning",
+      true,
+    );
   }
+
+  await revealFeedback();
 }
 
-function downloadOutput() {
+async function downloadOutput() {
   if (!output.value) return;
 
   const json = state.encoding === "json";
@@ -343,8 +367,8 @@ function downloadOutput() {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  actionColor.value = "success";
-  actionStatus.value = "Download started.";
+  showStatus("Download started.");
+  await revealFeedback();
 }
 
 const help: AccordionItem[] = [
@@ -482,7 +506,13 @@ const help: AccordionItem[] = [
         <div
           ref="feedback"
           class="scroll-mt-24 space-y-3"
-          :class="{ 'sr-only': !error && !status && !warnings.length }"
+          :class="
+            !error && !status && !warnings.length
+              ? output
+                ? 'lg:sr-only'
+                : 'sr-only'
+              : ''
+          "
         >
           <UAlert
             v-if="error"
@@ -723,19 +753,6 @@ const help: AccordionItem[] = [
               />
             </div>
           </UCard>
-        </div>
-        <div role="status" :class="{ 'sr-only': !actionStatus }">
-          <UAlert
-            v-if="actionStatus"
-            :color="actionColor"
-            variant="subtle"
-            :icon="
-              actionColor === 'success'
-                ? 'i-heroicons-check-circle'
-                : 'i-heroicons-exclamation-triangle'
-            "
-            :title="actionStatus"
-          />
         </div>
       </UForm>
 
