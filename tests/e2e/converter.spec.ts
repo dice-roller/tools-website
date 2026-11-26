@@ -157,3 +157,36 @@ test("strict conversion rejects inconsistent totals and best effort warns", asyn
   await expect(output).toBeVisible();
   expect(JSON.parse(await output.inputValue())).toMatchObject({ total: 7 });
 });
+
+for (const count of [2, 1000]) {
+  test(`converts a history containing ${count} rolls`, async ({ page }) => {
+    await page.goto("/converter");
+    const history = {
+      type: "dice-roller",
+      log: Array.from({ length: count }, () => legacyExample),
+      output: Array.from({ length: count }, () => legacyExample.output).join(
+        "; ",
+      ),
+      total: count * 7,
+    };
+    await page
+      .getByRole("textbox", { name: "Data to convert" })
+      .fill(JSON.stringify(history));
+    await page.getByRole("button", { name: "Convert data" }).click();
+    const output = page.getByRole("textbox", { name: "Converted data" });
+    await expect(output).toBeVisible();
+    const result = JSON.parse(await output.inputValue());
+    expect(result).toMatchObject({
+      type: "history",
+      version: 1,
+      total: count * 7,
+    });
+    expect(result.rolls).toHaveLength(count);
+    for (const roll of result.rolls) {
+      expect(roll).toMatchObject({ notation: "2d6", total: 7 });
+      expect(
+        roll.result.rolls.map((die: { value: number }) => die.value),
+      ).toEqual([2, 5]);
+    }
+  });
+}
