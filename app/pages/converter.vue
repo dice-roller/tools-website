@@ -14,7 +14,12 @@ import type {
   SupportedDataVersion,
   TargetVersion,
 } from "@dice-roller/convertor";
-import type { AccordionItem, BreadcrumbItem, FormError } from "@nuxt/ui";
+import type {
+  AccordionItem,
+  BreadcrumbItem,
+  FormError,
+  FormErrorEvent,
+} from "@nuxt/ui";
 import { legacyExample } from "~/data/converter-example";
 
 definePageMeta({ toolArtwork: true });
@@ -228,6 +233,16 @@ async function revealFeedback() {
   }
 }
 
+async function onValidationError(event: FormErrorEvent) {
+  await nextTick();
+  const id = event.errors[0]?.id;
+  if (!id) return;
+
+  const field = document.getElementById(id);
+  field?.focus();
+  field?.scrollIntoView({ block: "center" });
+}
+
 function jumpToOutput() {
   outputHeading.value?.focus();
   outputHeading.value?.scrollIntoView({ block: "start" });
@@ -358,6 +373,7 @@ const help: AccordionItem[] = [
         aria-labelledby="conversion-options-heading"
         class="space-y-6"
         @submit="onSubmit"
+        @error="onValidationError"
       >
         <UCard as="section" aria-labelledby="conversion-options-heading">
           <h2 id="conversion-options-heading" class="sr-only">
@@ -474,7 +490,7 @@ const help: AccordionItem[] = [
             title="Conversion failed"
             :description="error"
           />
-  
+
           <UAlert
             v-if="warnings.length"
             color="warning"
@@ -490,7 +506,7 @@ const help: AccordionItem[] = [
               </ul>
             </template>
           </UAlert>
-  
+
           <div
             role="status"
             aria-label="Conversion status"
@@ -583,7 +599,6 @@ const help: AccordionItem[] = [
 
                 <UTextarea
                   v-model="state.input"
-                  @update:model-value="uploadedFilename = ''"
                   :disabled="readingFile"
                   placeholder="Paste your JSON or Base64 export here…"
                   :rows="9"
@@ -591,6 +606,7 @@ const help: AccordionItem[] = [
                   :ui="{ base: 'min-h-48 resize-y' }"
                   spellcheck="false"
                   autocapitalize="off"
+                  @update:model-value="uploadedFilename = ''"
                 />
               </UFormField>
 
