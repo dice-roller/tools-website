@@ -198,3 +198,40 @@ test("converter preview is reachable from the homepage", async ({ page }) => {
   await page.keyboard.press("Space");
   await expect(strict).not.toBeChecked();
 });
+
+test("converter selectors use library capabilities", async ({ page }) => {
+  await page.goto("/converter");
+  const source = page.getByLabel("Source version", { exact: true });
+  const target = page.getByLabel("Target version", { exact: true });
+  const format = page.getByLabel("Output format", { exact: true });
+  const encoding = page.getByLabel("Encoding", { exact: true });
+  const option = (name: string) =>
+    page.getByRole("option", { name, exact: true });
+
+  await expect(target).toContainText("Schema 1 (v6)");
+  await format.click();
+  await option("Concise").click();
+  await expect(format).toContainText("Concise");
+
+  await source.click();
+  await option("Legacy (v5)").click();
+  await target.click();
+  await option("Legacy (v5)").click();
+  await expect(format).toContainText("Full");
+  await format.click();
+  await expect(option("Concise")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await source.click();
+  await option("Schema 1 (v6)").click();
+  await expect(target).toContainText("Schema 1 (v6)");
+  await target.click();
+  await expect(option("Legacy (v5)")).toHaveCount(0);
+  await expect(option("Latest supported")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await encoding.click();
+  await expect(option("JSON")).toBeVisible();
+  await expect(option("Base64")).toBeVisible();
+  await expect(option("Object")).toHaveCount(0);
+});

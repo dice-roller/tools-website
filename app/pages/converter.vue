@@ -1,4 +1,15 @@
 <script setup lang="ts">
+import {
+  getSupportedFormats,
+  getSupportedTargetVersions,
+  getSupportedVersions,
+  supportedEncodings,
+} from "@dice-roller/convertor";
+import type {
+  DataVersion,
+  ResultFormat,
+  TargetVersion,
+} from "@dice-roller/convertor";
 import type { AccordionItem, BreadcrumbItem } from "@nuxt/ui";
 
 definePageMeta({ toolArtwork: true });
@@ -14,28 +25,73 @@ const breadcrumbs: BreadcrumbItem[] = [
   { label: "Converter" },
 ];
 
+function versionLabel(version: DataVersion): string {
+  if (version === "legacy") return "Legacy (v5)";
+  if (version === 1) return "Schema 1 (v6)";
+  return `Schema ${version}`;
+}
+
+const supportedVersions = getSupportedVersions();
+const latestVersion = Math.max(
+  ...supportedVersions.filter((version) => typeof version === "number"),
+);
 const sourceVersions = [
-  { label: "Auto-detect", value: "auto" },
-  { label: "Legacy (v5)", value: "legacy" },
-  { label: "Schema 1 (v6)", value: "1" },
-];
-const targetVersions = [
-  { label: "Schema 1 (v6)", value: "1" },
-  { label: "Latest supported", value: "latest" },
-];
-const formats = [
-  { label: "Full", value: "full" },
-  { label: "Concise", value: "concise" },
-];
-const encodings = [
-  { label: "JSON", value: "json" },
-  { label: "Base64", value: "base64" },
+  { label: "Auto-detect", value: "auto" as const },
+  ...supportedVersions.map((version) => ({
+    label: versionLabel(version),
+    value: version,
+  })),
 ];
 
-const sourceVersion = ref("auto");
-const targetVersion = ref("1");
-const format = ref("full");
-const encoding = ref("json");
+const sourceVersion = ref<DataVersion | "auto">("auto");
+const targetVersion = ref<TargetVersion>(latestVersion);
+const format = ref<ResultFormat>("full");
+const encoding = ref<"json" | "base64">("json");
+
+const targetVersions = computed(() => {
+  const versions = getSupportedTargetVersions(
+    sourceVersion.value === "auto" ? undefined : sourceVersion.value,
+  );
+  const items: { label: string; value: TargetVersion }[] = versions.map(
+    (version) => ({ label: versionLabel(version), value: version }),
+  );
+
+  if (versions.some((version) => version === latestVersion)) {
+    items.push({ label: "Latest supported", value: "latest" });
+  }
+
+  return items;
+});
+
+const formats = computed(() =>
+  getSupportedFormats(targetVersion.value).map((value) => ({
+    label: value.charAt(0).toUpperCase() + value.slice(1),
+    value,
+  })),
+);
+
+const encodings = supportedEncodings
+  .filter((value) => value !== "object")
+  .map((value) => ({
+    label: value === "base64" ? "Base64" : value.toUpperCase(),
+    value,
+  }));
+
+watch(targetVersions, (items) => {
+  if (!items.some((item) => item.value === targetVersion.value)) {
+    targetVersion.value =
+      items.find((item) => item.value === latestVersion)?.value ??
+      items[0]?.value ??
+      "latest";
+  }
+});
+
+watch(formats, (items) => {
+  if (!items.some((item) => item.value === format.value)) {
+    format.value = "full";
+  }
+});
+
 const strict = ref(true);
 const input = ref("");
 
@@ -247,8 +303,10 @@ const help: AccordionItem[] = [
               JSON or Base64. The input encoding is detected automatically.
             </p>
             <p>
-              Convert to schema version 1, or select the latest supported
-              schema. Reverse migrations to legacy are not supported.
+              Select a target schema, or choose the latest supported version.
+              Available targets depend on the selected source version. Legacy
+              output is supported for re-encoding legacy data, but reverse
+              migrations to legacy are not supported.
             </p>
             <p>
               Full output preserves historical statistics and supports
