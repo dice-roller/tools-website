@@ -9,6 +9,12 @@ This website provides browser-based tools for RPG Dice Roller. It uses Nuxt 4, V
 - Use semantic Nuxt UI colour tokens and existing theme settings instead of hard-coded colours. Keep theme changes centralised.
 - Consult the [Dice Roller documentation](https://dice-roller.github.io/documentation/) and [library source](https://github.com/dice-roller/rpg-dice-roller) when working on dice notation, results or conversion.
 
+## Forms
+
+- Always wrap related form controls in a semantic HTML `<form>` element. Prefer Nuxt UI's `UForm` (which renders a native form for non-nested forms); `UFormField` alone is not a form. Do not nest native forms.
+- Use a shared reactive form state with field names matching its properties, and handle validation and submission through the form. Use `type="submit"` for submission buttons and `type="button"` for other actions, including help triggers, to avoid accidental submissions.
+- Keep labels associated with their controls, and test form semantics, keyboard submission and validation behaviour where applicable.
+
 ## Accessibility is a requirement
 
 Games should be for everyone. Follow [CONTRIBUTING.md](CONTRIBUTING.md), and target WCAG 2.2 Level AA for every page and interactive state.
