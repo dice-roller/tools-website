@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { legacyExample } from "../../app/data/converter-example";
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
@@ -176,6 +177,43 @@ for (const mode of ["light", "dark"] as const) {
       await options.focus();
       await page.keyboard.press("Enter");
       await expect(options).toHaveAttribute("aria-expanded", "true");
+      await audit(page);
+    });
+
+    test("conversion results and feedback meet automated WCAG rules", async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: mode });
+      await page.goto("/converter");
+      await expect(page.locator("html")).toHaveClass(new RegExp(mode));
+      const input = page.getByRole("textbox", { name: "Data to convert" });
+      const submit = page.getByRole("button", { name: "Convert data" });
+      const form = page.getByRole("form", { name: "Conversion options" });
+
+      await submit.click();
+      await expect(
+        page.getByText("Enter some exported dice roller data."),
+      ).toBeVisible();
+      await audit(page);
+
+      await input.fill("{invalid");
+      await submit.click();
+      await expect(form.getByRole("alert")).toContainText("Conversion failed");
+      await audit(page);
+
+      await page.getByRole("button", { name: "Load example" }).click();
+      await submit.click();
+      await expect(form.getByRole("status")).toContainText(
+        "Conversion complete.",
+      );
+      await audit(page);
+
+      await input.fill(JSON.stringify({ ...legacyExample, total: 8 }));
+      await page.getByRole("switch", { name: "Strict conversion" }).click();
+      await submit.click();
+      await expect(form.getByRole("status")).toContainText(
+        "Conversion complete with warnings.",
+      );
       await audit(page);
     });
 
