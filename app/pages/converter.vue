@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   convert,
+  detectVersion,
   getSupportedFormats,
   getSupportedTargetVersions,
   getSupportedVersions,
@@ -78,10 +79,43 @@ const state = reactive<ConverterFormState>({
   input: "",
 });
 
+const detectedSource = computed(() => {
+  const input = state.input.trim();
+  if (!input) return undefined;
+
+  try {
+    const version = detectVersion(input);
+    // Only inspect the envelope discriminator. The library owns decoding
+    // and validation of roll data, including legacy Base64 text.
+    const envelope = JSON.parse(input.startsWith("{") ? input : atob(input));
+    return {
+      version,
+      history:
+        envelope.type === "dice-roller" || envelope.type === "history",
+    };
+  } catch {
+    return undefined;
+  }
+});
+
+const detectedSourceHelp = computed(() => {
+  if (state.sourceVersion !== "auto" || !detectedSource.value) {
+    return undefined;
+  }
+  const { version } = detectedSource.value;
+  const supported = supportedVersions.some((item) => item === version);
+  return `Detected: ${versionLabel(version)}${supported ? "" : " (unsupported)"}`;
+});
+
 const targetVersions = computed(() => {
-  const versions = getSupportedTargetVersions(
-    state.sourceVersion === "auto" ? undefined : state.sourceVersion,
-  );
+  const source =
+    state.sourceVersion === "auto"
+      ? detectedSource.value?.version
+      : state.sourceVersion;
+  const versions =
+    source !== undefined && !supportedVersions.some((item) => item === source)
+      ? []
+      : getSupportedTargetVersions(source);
   const items: { label: string; value: TargetVersion }[] = versions.map(
     (version) => ({ label: versionLabel(version), value: version }),
   );
@@ -94,10 +128,12 @@ const targetVersions = computed(() => {
 });
 
 const formats = computed(() =>
-  getSupportedFormats(state.targetVersion).map((value) => ({
-    label: value.charAt(0).toUpperCase() + value.slice(1),
-    value,
-  })),
+  getSupportedFormats(state.targetVersion)
+    .filter((value) => !detectedSource.value?.history || value === "full")
+    .map((value) => ({
+      label: value.charAt(0).toUpperCase() + value.slice(1),
+      value,
+    })),
 );
 
 const encodings = supportedEncodings
@@ -113,7 +149,10 @@ const inputEncodings = [
 ];
 
 watch(targetVersions, (items) => {
-  if (!items.some((item) => item.value === state.targetVersion)) {
+  if (
+    items.length &&
+    !items.some((item) => item.value === state.targetVersion)
+  ) {
     state.targetVersion =
       items.find((item) => item.value === latestVersion)?.value ??
       items[0]?.value ??
@@ -315,6 +354,7 @@ const help: AccordionItem[] = [
               <USelectMenu
                 v-model="state.targetVersion"
                 :items="targetVersions"
+                :disabled="!targetVersions.length"
                 value-key="value"
                 :search-input="false"
                 size="lg"
@@ -469,6 +509,7 @@ const help: AccordionItem[] = [
                 <UFormField
                   name="sourceVersion"
                   label="Source version"
+                  :help="detectedSourceHelp"
                   :ui="{ labelWrapper: 'justify-start' }"
                 >
                   <template #hint>
@@ -642,6 +683,8 @@ const help: AccordionItem[] = [
               Full output preserves historical statistics and supports
               individual rolls and histories. Concise output is only available
               for individual rolls and does not retain historical statistics.
+              Available output formats are restricted automatically for
+              histories.
             </p>
             <p>
               Strict conversion rejects ambiguous or inconsistent data.
