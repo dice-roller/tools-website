@@ -189,6 +189,13 @@ for (const mode of ["light", "dark"] as const) {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),
       ).toBeLessThanOrEqual(320);
+      const command = page.locator("pre").filter({ hasText: "npm install" });
+      await expect(command).toBeVisible();
+      expect(
+        await command.evaluate((element) => element.scrollWidth),
+      ).toBeLessThanOrEqual(
+        await command.evaluate((element) => element.clientWidth),
+      );
       await audit(page);
     });
   });
@@ -330,4 +337,28 @@ test("converter field help is available without changing values", async ({
   await expect(strict).toBeChecked();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("tooltip")).toBeHidden();
+});
+
+test("converter links to its library and installation instructions", async ({
+  page,
+}) => {
+  await page.goto("/converter");
+  const library = page.getByRole("region", {
+    name: "Use the converter in your own project",
+  });
+  await expect(library.locator("pre code")).toHaveText(
+    "npm install @dice-roller/convertor",
+  );
+  await expect(
+    library.getByRole("link", { name: "Converter documentation" }),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/dice-roller/convertor/tree/next#readme",
+  );
+  await expect(
+    library.getByRole("link", { name: "View on npm" }),
+  ).toHaveAttribute(
+    "href",
+    "https://www.npmjs.com/package/@dice-roller/convertor",
+  );
 });

@@ -645,6 +645,46 @@ const help: AccordionItem[] = [
           </template>
         </UAccordion>
       </UCard>
+
+      <UCard as="section" aria-labelledby="converter-library-heading">
+        <div class="space-y-3">
+          <h2
+            id="converter-library-heading"
+            class="font-serif text-xl font-semibold text-highlighted"
+          >
+            Use the converter in your own project
+          </h2>
+          <p class="text-toned">
+            This tool uses the open-source RPG Dice Roller Convertor library.
+            You can install the same library in your own JavaScript or
+            TypeScript project to convert exports programmatically.
+          </p>
+
+          <pre
+            class="rounded-md bg-elevated p-3 text-sm wrap-anywhere whitespace-pre-wrap text-highlighted"
+          ><code>npm install @dice-roller/convertor</code></pre>
+
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              to="https://github.com/dice-roller/convertor/tree/next#readme"
+              target="_blank"
+              label="Converter documentation"
+              icon="i-lucide-book-open"
+              trailing-icon="i-heroicons-arrow-up-right"
+              color="neutral"
+              variant="outline"
+            />
+            <UButton
+              to="https://www.npmjs.com/package/@dice-roller/convertor"
+              target="_blank"
+              label="View on npm"
+              trailing-icon="i-heroicons-arrow-up-right"
+              color="neutral"
+              variant="link"
+            />
+          </div>
+        </div>
+      </UCard>
     </div>
   </UContainer>
 </template>
