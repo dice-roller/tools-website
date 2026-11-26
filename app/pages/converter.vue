@@ -681,9 +681,10 @@ const help: AccordionItem[] = [
               variant="outline"
             />
             <UButton
-              to="https://www.npmjs.com/package/@dice-roller/convertor"
+              to="https://github.com/dice-roller/convertor"
               target="_blank"
-              label="View on npm"
+              label="View on GitHub"
+              icon="i-lucide-github"
               trailing-icon="i-heroicons-arrow-up-right"
               color="neutral"
               variant="link"

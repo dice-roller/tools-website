@@ -34,4 +34,4 @@ export const tools: readonly Tool[] = [
   },
 ];
 
-export const repositoryUrl = "https://github.com/dice-roller/tools-website";
+export const githubOrganisationUrl = "https://github.com/dice-roller";

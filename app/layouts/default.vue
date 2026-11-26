@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from "@nuxt/ui";
-import { repositoryUrl, tools } from "~/data/tools";
+import { githubOrganisationUrl, tools } from "~/data/tools";
 
 const documentationUrl = useRuntimeConfig().public.documentationBaseUrl;
 
@@ -57,12 +57,12 @@ const mobileItems: NavigationMenuItem[] = [
 
       <template #right>
         <UButton
-          :to="repositoryUrl"
+          :to="githubOrganisationUrl"
           target="_blank"
           color="neutral"
           variant="ghost"
           icon="i-lucide-github"
-          aria-label="GitHub repository"
+          aria-label="Dice Roller on GitHub"
         />
         <UColorModeButton />
       </template>
@@ -98,7 +98,7 @@ const mobileItems: NavigationMenuItem[] = [
           trailing-icon="i-heroicons-arrow-up-right"
         />
         <UButton
-          :to="repositoryUrl"
+          :to="githubOrganisationUrl"
           target="_blank"
           color="neutral"
           variant="link"

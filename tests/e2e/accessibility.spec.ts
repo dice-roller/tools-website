@@ -362,11 +362,8 @@ test("converter links to its library and installation instructions", async ({
     ).href,
   );
   await expect(
-    library.getByRole("link", { name: "View on npm" }),
-  ).toHaveAttribute(
-    "href",
-    "https://www.npmjs.com/package/@dice-roller/convertor",
-  );
+    library.getByRole("link", { name: "View on GitHub" }),
+  ).toHaveAttribute("href", "https://github.com/dice-roller/convertor");
 });
 
 test("documentation links use the configured base URL", async ({ page }) => {
@@ -393,4 +390,16 @@ test("documentation links use the configured base URL", async ({ page }) => {
   await expect(
     page.getByRole("dialog").getByRole("link", { name: "Documentation" }),
   ).toHaveAttribute("href", url);
+});
+
+test("shared GitHub links point to the Dice Roller organisation", async ({
+  page,
+}) => {
+  await openHomepage(page, "light");
+  await expect(
+    page.getByRole("link", { name: "Dice Roller on GitHub", exact: true }),
+  ).toHaveAttribute("href", "https://github.com/dice-roller");
+  await expect(
+    page.getByRole("contentinfo").getByRole("link", { name: "GitHub" }),
+  ).toHaveAttribute("href", "https://github.com/dice-roller");
 });
