@@ -52,6 +52,7 @@ const sourceVersion = ref<DataVersion | "auto">("auto");
 const targetVersion = ref<TargetVersion>(latestVersion);
 const format = ref<ResultFormat>("full");
 const encoding = ref<"json" | "base64">("json");
+const inputEncoding = ref<"auto" | "json" | "base64">("auto");
 
 const targetVersions = computed(() => {
   const versions = getSupportedTargetVersions(
@@ -81,6 +82,11 @@ const encodings = supportedEncodings
     label: value === "base64" ? "Base64" : value.toUpperCase(),
     value,
   }));
+
+const inputEncodings = [
+  { label: "Auto-detect", value: "auto" as const },
+  ...encodings,
+];
 
 watch(targetVersions, (items) => {
   if (!items.some((item) => item.value === targetVersion.value)) {
@@ -246,9 +252,11 @@ const help: AccordionItem[] = [
               </UFormField>
 
               <UFormField name="input-encoding" label="Input encoding">
-                <UInput
-                  model-value="Auto-detect"
-                  readonly
+                <USelectMenu
+                  v-model="inputEncoding"
+                  :items="inputEncodings"
+                  value-key="value"
+                  :search-input="false"
                   size="lg"
                   class="w-full"
                 />
@@ -318,7 +326,8 @@ const help: AccordionItem[] = [
           <template #body>
             <p>
               Legacy (v5) exports and version 1 (v6) exports can be supplied as
-              JSON or Base64. The input encoding is detected automatically.
+              JSON or Base64. The input encoding defaults to Auto-detect, or
+              you can select it explicitly.
             </p>
             <p>
               Select a target schema, or choose the latest supported version.

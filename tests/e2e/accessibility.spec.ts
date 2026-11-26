@@ -145,6 +145,14 @@ for (const mode of ["light", "dark"] as const) {
       await page.keyboard.press("Escape");
       await expect(select).toBeFocused();
 
+      const inputEncoding = page.getByLabel("Input encoding", { exact: true });
+      await inputEncoding.focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("option", { name: "Base64" })).toBeVisible();
+      await audit(page);
+      await page.keyboard.press("Escape");
+      await expect(inputEncoding).toBeFocused();
+
       const options = page.getByRole("button", {
         name: "Supported formats and conversion options",
       });
@@ -187,8 +195,8 @@ test("converter preview is reachable from the homepage", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Copy" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Download" })).toBeDisabled();
   await expect(
-    page.getByRole("textbox", { name: "Input encoding" }),
-  ).toHaveValue("Auto-detect");
+    page.getByLabel("Input encoding", { exact: true }),
+  ).toContainText("Auto-detect");
   await expect(
     page.getByRole("textbox", { name: "Data to convert" }),
   ).toBeEditable();
@@ -234,4 +242,15 @@ test("converter selectors use library capabilities", async ({ page }) => {
   await expect(option("JSON")).toBeVisible();
   await expect(option("Base64")).toBeVisible();
   await expect(option("Object")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  const inputEncoding = page.getByLabel("Input encoding", { exact: true });
+  await expect(inputEncoding).toContainText("Auto-detect");
+  await inputEncoding.click();
+  await expect(option("Auto-detect")).toBeVisible();
+  await expect(option("JSON")).toBeVisible();
+  await expect(option("Object")).toHaveCount(0);
+  await option("Base64").click();
+  await expect(inputEncoding).toContainText("Base64");
+  await expect(encoding).toContainText("JSON");
 });
