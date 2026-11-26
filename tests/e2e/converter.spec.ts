@@ -128,3 +128,32 @@ for (const width of [1280, 375]) {
     expect(cardAfter?.height).toBeCloseTo(cardBefore!.height, 0);
   });
 }
+
+test("strict conversion rejects inconsistent totals and best effort warns", async ({
+  page,
+}) => {
+  await page.goto("/converter");
+  const input = page.getByRole("textbox", { name: "Data to convert" });
+  const output = page.getByRole("textbox", { name: "Converted data" });
+  const submit = page.getByRole("button", { name: "Convert data" });
+  const form = page.getByRole("form", { name: "Conversion options" });
+  await input.fill(JSON.stringify({ ...legacyExample, total: 8 }));
+  await submit.click();
+  await expect(form.getByRole("alert")).toContainText("Conversion failed");
+  await expect(output).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Download" })).toBeDisabled();
+
+  await page.getByRole("switch", { name: "Strict conversion" }).click();
+  await submit.click();
+  await expect(form.getByRole("status")).toContainText(
+    "Conversion complete with warnings.",
+  );
+  await expect(
+    form.getByText("Conversion warnings", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    form.getByText(/data\.total: Stored value 8 differs/),
+  ).toBeVisible();
+  await expect(output).toBeVisible();
+  expect(JSON.parse(await output.inputValue())).toMatchObject({ total: 7 });
+});
