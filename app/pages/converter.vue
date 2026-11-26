@@ -125,6 +125,7 @@ const output = ref("");
 const warnings = ref<ConversionWarning[]>([]);
 const error = ref("");
 const status = ref("");
+const statusColor = ref<"success" | "warning">("success");
 const fileInput = ref<HTMLInputElement | null>(null);
 const readingFile = ref(false);
 
@@ -133,6 +134,7 @@ function clearResult() {
   warnings.value = [];
   error.value = "";
   status.value = "";
+  statusColor.value = "success";
 }
 
 watch(state, clearResult);
@@ -185,7 +187,10 @@ function onSubmit() {
         ? JSON.stringify(JSON.parse(result), null, 2)
         : result;
     warnings.value = collectedWarnings;
-    status.value = "Conversion complete.";
+    statusColor.value = collectedWarnings.length ? "warning" : "success";
+    status.value = collectedWarnings.length
+      ? "Conversion complete with warnings."
+      : "Conversion complete.";
   } catch (cause) {
     error.value = errorMessage(cause);
   }
@@ -223,8 +228,10 @@ async function copyOutput() {
 
   try {
     await navigator.clipboard.writeText(output.value);
+    statusColor.value = "success";
     status.value = "Converted data copied to clipboard.";
   } catch {
+    statusColor.value = "warning";
     status.value =
       "Could not copy automatically. Select and copy the output manually.";
   }
@@ -245,6 +252,7 @@ function downloadOutput() {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  statusColor.value = "success";
   status.value = "Download started.";
 }
 
@@ -585,9 +593,19 @@ const help: AccordionItem[] = [
           </template>
         </UAlert>
 
-        <p role="status" :class="status ? 'text-sm text-muted' : 'sr-only'">
-          {{ status }}
-        </p>
+        <div role="status" :class="{ 'sr-only': !status }">
+          <UAlert
+            v-if="status"
+            :color="statusColor"
+            variant="subtle"
+            :icon="
+              statusColor === 'success'
+                ? 'i-heroicons-check-circle'
+                : 'i-heroicons-exclamation-triangle'
+            "
+            :title="status"
+          />
+        </div>
       </UForm>
 
       <UAlert

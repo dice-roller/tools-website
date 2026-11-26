@@ -17,6 +17,8 @@ test("converts a legacy export and downloads the result", async ({ page }) => {
   await page.getByRole("button", { name: "Convert data" }).click();
   const output = page.getByRole("textbox", { name: "Converted data" });
   await expect(output).toBeVisible();
+  const form = page.getByRole("form", { name: "Conversion options" });
+  await expect(form.getByRole("status")).toContainText("Conversion complete.");
   expect(JSON.parse(await output.inputValue())).toMatchObject({
     type: "roll",
     version: 1,
