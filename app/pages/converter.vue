@@ -138,7 +138,18 @@ const help: AccordionItem[] = [
         <div
           class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]"
         >
-          <UFormField name="target" label="Target version">
+          <UFormField
+            name="target"
+            label="Target version"
+            :ui="{ labelWrapper: 'justify-start' }"
+          >
+            <template #hint>
+              <FieldInfo
+                label="Target version"
+                text="Choose the destination data schema. Latest supported uses the newest schema the converter knows."
+              />
+            </template>
+
             <USelectMenu
               v-model="targetVersion"
               :items="targetVersions"
@@ -149,7 +160,18 @@ const help: AccordionItem[] = [
             />
           </UFormField>
 
-          <UFormField name="format" label="Output format">
+          <UFormField
+            name="format"
+            label="Output format"
+            :ui="{ labelWrapper: 'justify-start' }"
+          >
+            <template #hint>
+              <FieldInfo
+                label="Output format"
+                text="Full preserves historical statistics. Concise is for individual rolls and omits historical statistics."
+              />
+            </template>
+
             <USelectMenu
               v-model="format"
               :items="formats"
@@ -160,7 +182,18 @@ const help: AccordionItem[] = [
             />
           </UFormField>
 
-          <UFormField name="encoding" label="Encoding">
+          <UFormField
+            name="encoding"
+            label="Encoding"
+            :ui="{ labelWrapper: 'justify-start' }"
+          >
+            <template #hint>
+              <FieldInfo
+                label="Output encoding"
+                text="Choose readable JSON or Base64 for the converted output."
+              />
+            </template>
+
             <USelectMenu
               v-model="encoding"
               :items="encodings"
@@ -171,13 +204,19 @@ const help: AccordionItem[] = [
             />
           </UFormField>
 
-          <USwitch
-            v-model="strict"
-            label="Strict conversion"
-            size="xl"
-            class="min-h-10 items-center"
-            :ui="{ base: 'motion-reduce:transition-none' }"
-          />
+          <div class="flex min-h-10 items-center gap-1">
+            <USwitch
+              v-model="strict"
+              label="Strict conversion"
+              size="xl"
+              class="items-center"
+              :ui="{ base: 'motion-reduce:transition-none' }"
+            />
+            <FieldInfo
+              label="Strict conversion"
+              text="Reject ambiguous or inconsistent data. Turn off to allow best-effort conversion with warnings."
+            />
+          </div>
 
           <UButton
             label="Convert data"
@@ -225,7 +264,18 @@ const help: AccordionItem[] = [
           </template>
 
           <div class="space-y-4">
-            <UFormField name="input" label="Data to convert">
+            <UFormField
+              name="input"
+              label="Data to convert"
+              :ui="{ labelWrapper: 'justify-start' }"
+            >
+              <template #hint>
+                <FieldInfo
+                  label="Data to convert"
+                  text="Paste an exported individual roll or roll history in JSON or Base64."
+                />
+              </template>
+
               <UTextarea
                 v-model="input"
                 placeholder="Paste your JSON or Base64 export here…"
@@ -238,7 +288,18 @@ const help: AccordionItem[] = [
             </UFormField>
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <UFormField name="source" label="Source version">
+              <UFormField
+                name="source"
+                label="Source version"
+                :ui="{ labelWrapper: 'justify-start' }"
+              >
+                <template #hint>
+                  <FieldInfo
+                    label="Source version"
+                    text="Choose the original data schema, or use Auto-detect to identify it from the export."
+                  />
+                </template>
+
                 <USelectMenu
                   v-model="sourceVersion"
                   :items="sourceVersions"
@@ -249,7 +310,18 @@ const help: AccordionItem[] = [
                 />
               </UFormField>
 
-              <UFormField name="input-encoding" label="Input encoding">
+              <UFormField
+                name="input-encoding"
+                label="Input encoding"
+                :ui="{ labelWrapper: 'justify-start' }"
+              >
+                <template #hint>
+                  <FieldInfo
+                    label="Input encoding"
+                    text="Choose the encoding of your input, or use Auto-detect."
+                  />
+                </template>
+
                 <USelectMenu
                   v-model="inputEncoding"
                   :items="inputEncodings"

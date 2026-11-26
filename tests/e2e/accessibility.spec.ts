@@ -137,6 +137,17 @@ for (const mode of ["light", "dark"] as const) {
       ).toBeVisible();
       await audit(page);
 
+      const info = page.getByRole("button", { name: "About Output format" });
+      await info.focus();
+      const tooltip = page.getByRole("tooltip");
+      await expect(tooltip).toContainText(
+        "Full preserves historical statistics",
+      );
+      await audit(page);
+      await page.keyboard.press("Escape");
+      await expect(tooltip).toBeHidden();
+      await expect(info).toBeFocused();
+
       const select = page.getByLabel("Output format", { exact: true });
       await select.focus();
       await page.keyboard.press("Enter");
@@ -264,4 +275,32 @@ test("converter selectors use library capabilities", async ({ page }) => {
   await option("Input encoding", "Base64").click();
   await expect(inputEncoding).toContainText("Base64");
   await expect(encoding).toContainText("JSON");
+});
+
+test("converter field help is available without changing values", async ({
+  page,
+}) => {
+  await page.goto("/converter");
+  for (const label of [
+    "Target version",
+    "Output format",
+    "Output encoding",
+    "Strict conversion",
+    "Data to convert",
+    "Source version",
+    "Input encoding",
+  ]) {
+    await expect(
+      page.getByRole("button", { name: `About ${label}`, exact: true }),
+    ).toBeVisible();
+  }
+
+  const strict = page.getByRole("switch", { name: "Strict conversion" });
+  const info = page.getByRole("button", { name: "About Strict conversion" });
+  await expect(strict).toBeChecked();
+  await info.click();
+  await expect(page.getByRole("tooltip")).toContainText("Reject ambiguous");
+  await expect(strict).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
 });
