@@ -4,7 +4,7 @@ export interface Tool {
   description: string;
   icon: string;
   path?: string;
-  status: "Coming soon" | "Planned";
+  status?: "Coming soon" | "Planned";
 }
 
 export const tools: readonly Tool[] = [
@@ -15,7 +15,6 @@ export const tools: readonly Tool[] = [
     description:
       "Convert exported rolls and histories between supported data versions and formats.",
     icon: "i-heroicons-arrows-right-left",
-    status: "Coming soon",
   },
   {
     id: "playground",

@@ -66,6 +66,9 @@ for (const mode of ["light", "dark"] as const) {
       await page.keyboard.press("Enter");
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await expect(
+        page.getByRole("link", { name: "Data converter", exact: true }),
+      ).toBeVisible();
+      await expect(
         page.getByRole("link", { name: /AST explorer/ }),
       ).toBeVisible();
       await audit(page);
@@ -83,6 +86,9 @@ for (const mode of ["light", "dark"] as const) {
         .click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
+      await expect(
+        dialog.getByRole("link", { name: "Data converter", exact: true }),
+      ).toBeVisible();
       await expect(
         dialog.getByRole("link", { name: "AST explorer" }),
       ).toBeVisible();
@@ -188,10 +194,15 @@ for (const mode of ["light", "dark"] as const) {
   });
 }
 
-test("converter preview is reachable from the homepage", async ({ page }) => {
+test("converter is reachable from the homepage", async ({ page }) => {
   await openHomepage(page, "light");
+  const card = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "Data converter", exact: true }),
+  });
+  await expect(card).not.toContainText(/coming soon|planned|preview/i);
+  await expect(page.getByText("Planned", { exact: true })).toHaveCount(2);
   await page
-    .getByRole("link", { name: "Preview data converter", exact: true })
+    .getByRole("link", { name: "Open data converter", exact: true })
     .click();
   await expect(page).toHaveURL(/\/converter\/?$/);
   const form = page.getByRole("form", { name: "Conversion options" });

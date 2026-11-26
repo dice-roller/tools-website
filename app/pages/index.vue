@@ -64,7 +64,7 @@ const links: ButtonProps[] = [
             :as="{ root: 'article', title: 'h3' }"
             :title="tool.title"
             :description="tool.description"
-            :highlight="tool.status === 'Coming soon'"
+            :highlight="!!tool.path"
             class="scroll-mt-24"
             :ui="{
               title: 'font-serif text-xl',
@@ -76,11 +76,16 @@ const links: ButtonProps[] = [
           >
             <template #footer>
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <UBadge color="neutral" variant="subtle" :label="tool.status" />
+                <UBadge
+                  v-if="tool.status"
+                  color="neutral"
+                  variant="subtle"
+                  :label="tool.status"
+                />
                 <UButton
                   v-if="tool.path"
                   :to="tool.path"
-                  label="Preview data converter"
+                  :label="`Open ${tool.title.toLowerCase()}`"
                   trailing-icon="i-heroicons-arrow-right"
                   variant="link"
                 />
