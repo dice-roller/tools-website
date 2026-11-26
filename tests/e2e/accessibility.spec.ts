@@ -205,17 +205,17 @@ for (const mode of ["light", "dark"] as const) {
 
       await page.getByRole("button", { name: "Load example" }).click();
       await submit.click();
-      await expect(form.getByRole("status")).toContainText(
-        "Conversion complete.",
-      );
+      await expect(
+        form.getByRole("status", { name: "Conversion status" }),
+      ).toContainText("Conversion complete.");
       await audit(page);
 
       await input.fill(JSON.stringify({ ...legacyExample, total: 8 }));
       await page.getByRole("switch", { name: "Strict conversion" }).click();
       await submit.click();
-      await expect(form.getByRole("status")).toContainText(
-        "Conversion complete with warnings.",
-      );
+      await expect(
+        form.getByRole("status", { name: "Conversion status" }),
+      ).toContainText("Conversion complete with warnings.");
       await audit(page);
     });
 
