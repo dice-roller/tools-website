@@ -247,7 +247,7 @@ function errorMessage(cause: unknown): string {
 async function revealFeedback() {
   await nextTick();
   if (window.matchMedia("(max-width: 1023px)").matches) {
-    feedback.value?.scrollIntoView({ block: "nearest" });
+    feedback.value?.scrollIntoView({ block: "start" });
   }
 }
 
@@ -398,7 +398,7 @@ const help: AccordionItem[] = [
         :state="state"
         :validate="validate"
         aria-labelledby="conversion-options-heading"
-        class="space-y-6"
+        class="flex flex-col"
         @submit="onSubmit"
         @error="onValidationError"
       >
@@ -503,73 +503,68 @@ const help: AccordionItem[] = [
           </div>
         </UCard>
 
-        <div
-          ref="feedback"
-          class="scroll-mt-24 space-y-3"
-          :class="
-            !error && !status && !warnings.length
-              ? output
-                ? 'lg:sr-only'
-                : 'sr-only'
-              : ''
-          "
-        >
-          <UAlert
-            v-if="error"
-            role="alert"
-            color="error"
-            variant="subtle"
-            icon="i-heroicons-exclamation-circle"
-            title="Conversion failed"
-            :description="error"
-          />
+        <div ref="feedback" class="scroll-mt-24">
+          <FeedbackTransition :show="!!error" @after-enter="revealFeedback">
+            <UAlert
+              role="alert"
+              color="error"
+              variant="subtle"
+              icon="i-heroicons-exclamation-circle"
+              title="Conversion failed"
+              :description="error"
+            />
+          </FeedbackTransition>
 
-          <UAlert
-            v-if="warnings.length"
-            color="warning"
-            variant="subtle"
-            icon="i-heroicons-exclamation-triangle"
-            title="Conversion warnings"
-          >
-            <template #description>
-              <ul class="list-disc space-y-1 ps-4">
-                <li v-for="(warning, index) in warnings" :key="index">
-                  {{ warning.path }}: {{ warning.message }}
-                </li>
-              </ul>
-            </template>
-          </UAlert>
-
-          <div
-            role="status"
-            aria-label="Conversion status"
-            :class="{ 'sr-only': !status }"
+          <FeedbackTransition
+            :show="!!warnings.length"
+            @after-enter="revealFeedback"
           >
             <UAlert
-              v-if="status"
-              :color="statusColor"
+              color="warning"
               variant="subtle"
-              :icon="
-                statusColor === 'success'
-                  ? 'i-heroicons-check-circle'
-                  : 'i-heroicons-exclamation-triangle'
-              "
-              :title="status"
-            />
+              icon="i-heroicons-exclamation-triangle"
+              title="Conversion warnings"
+            >
+              <template #description>
+                <ul class="list-disc space-y-1 ps-4">
+                  <li v-for="(warning, index) in warnings" :key="index">
+                    {{ warning.path }}: {{ warning.message }}
+                  </li>
+                </ul>
+              </template>
+            </UAlert>
+          </FeedbackTransition>
+
+          <div role="status" aria-label="Conversion status">
+            <FeedbackTransition :show="!!status" @after-enter="revealFeedback">
+              <UAlert
+                :color="statusColor"
+                variant="subtle"
+                :icon="
+                  statusColor === 'success'
+                    ? 'i-heroicons-check-circle'
+                    : 'i-heroicons-exclamation-triangle'
+                "
+                :title="status"
+              />
+            </FeedbackTransition>
           </div>
-          <UButton
-            v-if="output"
-            type="button"
-            label="View converted output"
-            trailing-icon="i-heroicons-arrow-down"
-            color="neutral"
-            variant="outline"
-            class="lg:hidden"
-            @click="jumpToOutput"
-          />
+
+          <div class="lg:hidden">
+            <FeedbackTransition :show="!!output">
+              <UButton
+                type="button"
+                label="View converted output"
+                trailing-icon="i-heroicons-arrow-down"
+                color="neutral"
+                variant="outline"
+                @click="jumpToOutput"
+              />
+            </FeedbackTransition>
+          </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div class="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
           <UCard
             as="section"
             aria-labelledby="converter-input-heading"

@@ -163,7 +163,7 @@ test("strict conversion rejects inconsistent totals and best effort warns", asyn
     form.getByText("Conversion warnings", { exact: true }),
   ).toBeVisible();
   await expect(
-    form.getByText(/data\.total: Stored value 8 differs/),
+    form.getByRole("list").getByText(/data\.total: Stored value 8 differs/),
   ).toBeVisible();
   await expect(output).toBeVisible();
   expect(JSON.parse(await output.inputValue())).toMatchObject({ total: 7 });
@@ -347,6 +347,7 @@ test("a clipboard failure leaves the output available for manual copying", async
 test("success feedback shares one location and expires without clearing output", async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/converter");
   await page.clock.install();
   await page.getByRole("button", { name: "Load example" }).click();
@@ -381,6 +382,7 @@ test("success feedback shares one location and expires without clearing output",
 test("conversion errors and detailed warnings persist until the input changes", async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/converter");
   await page.clock.install();
   const input = page.getByRole("textbox", { name: "Data to convert" });
@@ -406,3 +408,42 @@ test("conversion errors and detailed warnings persist until the input changes", 
   await input.fill(JSON.stringify(legacyExample));
   await expect(warnings).toHaveCount(0);
 });
+
+for (const reducedMotion of ["no-preference", "reduce"] as const) {
+  test(`feedback expands and collapses with motion preference ${reducedMotion}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    await page.goto("/converter");
+    await page.getByRole("button", { name: "Load example" }).click();
+    const card = page.getByRole("region", { name: "Input", exact: true });
+    const status = page.getByRole("status", { name: "Conversion status" });
+    const cardTop = () =>
+      card.evaluate((element) => element.getBoundingClientRect().top + scrollY);
+    const before = await cardTop();
+
+    await page.getByRole("button", { name: "Convert data" }).click();
+    const panel = status.locator(".feedback-expand");
+    await expect(panel).toBeVisible();
+    const duration = await panel.evaluate(
+      (element) => getComputedStyle(element).transitionDuration,
+    );
+    if (reducedMotion === "reduce") {
+      expect(duration).toBe("0s");
+    } else {
+      // The grid track and opacity transition together, rather than
+      // reserving the final height before the animation starts.
+      const properties = await panel.evaluate(
+        (element) => getComputedStyle(element).transitionProperty,
+      );
+      expect(properties).toContain("grid-template-rows");
+      expect(properties).toContain("opacity");
+    }
+    await expect.poll(cardTop).toBeGreaterThan(before + 40);
+    await page
+      .getByRole("textbox", { name: "Data to convert" })
+      .fill("{invalid");
+    await expect(panel).toHaveCount(0);
+    await expect.poll(cardTop).toBeCloseTo(before, 0);
+  });
+}

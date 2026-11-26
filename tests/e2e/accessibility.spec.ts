@@ -189,6 +189,8 @@ for (const mode of ["light", "dark"] as const) {
       const input = page.getByRole("textbox", { name: "Data to convert" });
       const submit = page.getByRole("button", { name: "Convert data" });
       const form = page.getByRole("form", { name: "Conversion options" });
+      // Audit the settled state, not a partially transparent animation frame.
+      await page.emulateMedia({ reducedMotion: "reduce" });
 
       await submit.click();
       await expect(
