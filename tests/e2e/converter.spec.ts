@@ -190,3 +190,55 @@ for (const count of [2, 1000]) {
     }
   });
 }
+
+test("detects the source and restricts targets and history formats", async ({
+  page,
+}) => {
+  await page.goto("/converter");
+  const input = page.getByRole("textbox", { name: "Data to convert" });
+  const target = page.getByLabel("Target version", { exact: true });
+  const format = page.getByLabel("Output format", { exact: true });
+  await page.getByRole("button", { name: "Load example" }).click();
+  await expect(page.getByText("Detected: Legacy (v5)")).toBeVisible();
+  await selectOption(page, "Target version", "Legacy (v5)");
+
+  await input.fill(JSON.stringify({ notation: "2d6", rolls: [[2, 5]] }));
+  await expect(page.getByText("Detected: Schema 1 (v6)")).toBeVisible();
+  await expect(target).toContainText("Schema 1 (v6)");
+  await target.click();
+  const targets = page.getByRole("listbox", { name: "Target version" });
+  await expect(
+    targets.getByRole("option", { name: "Legacy (v5)" }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(targets).toBeHidden();
+  await selectOption(page, "Output format", "Concise");
+
+  const history = {
+    type: "dice-roller",
+    log: [legacyExample],
+    output: legacyExample.output,
+    total: 7,
+  };
+  await input.fill(Buffer.from(JSON.stringify(history)).toString("base64"));
+  await expect(page.getByText("Detected: Legacy (v5)")).toBeVisible();
+  await expect(format).toContainText("Full");
+  await format.click();
+  const formats = page.getByRole("listbox", { name: "Output format" });
+  await expect(formats.getByRole("option", { name: "Full" })).toBeVisible();
+  await expect(formats.getByRole("option", { name: "Concise" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(formats).toBeHidden();
+
+  await input.fill("{invalid");
+  await expect(page.getByText(/Detected:/)).toHaveCount(0);
+  await selectOption(page, "Output format", "Concise");
+
+  await input.fill(JSON.stringify({ type: "roll", version: 999 }));
+  await expect(
+    page.getByText("Detected: Schema 999 (unsupported)"),
+  ).toBeVisible();
+  await expect(target).toBeDisabled();
+  await input.fill("");
+  await expect(target).toBeEnabled();
+});
