@@ -1,0 +1,61 @@
+name: Verify every converter commit
+
+on:
+  pull_request:
+    branches: [chore/converter-ci-base]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Commit ${{ matrix.stage }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - stage: 1
+            ref: 8202344ba96e6020c897dc2f9532374299c1772b
+            browsers: chromium
+          - stage: 2
+            ref: cdd634f83fbe8aae94738e2b039db3803b939d63
+            browsers: chromium
+          - stage: 3
+            ref: 7b4157e6482d6a8fb9500add0a873e38d3930374
+            browsers: chromium
+          - stage: 4
+            ref: 35f848bbb654dd195c21bb1e211ead708764003a
+            browsers: chromium
+          - stage: 5
+            ref: b1ffc6d2f50a2a6a02e372b75ddcfe32fbeaa591
+            browsers: chromium
+          - stage: 6
+            ref: 34f7d1b759bf62785f14014019e15520024d9a4d
+            browsers: chromium
+          - stage: 7
+            ref: dc71c5161f3489df05c80e82a9e783bac281d544
+            browsers: chromium
+          - stage: 8
+            ref: 1a206d3eef8cbc447a4ae8f675683310b11717ea
+            browsers: chromium firefox
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: Print formatting diff if needed
+        if: failure()
+        run: |
+          npx prettier --write app/pages/converter.vue tests/e2e/accessibility.spec.ts tests/e2e/converter.spec.ts
+          git diff
+      - run: npm run typecheck
+      - run: npx playwright install --with-deps ${{ matrix.browsers }}
+      - run: npm run test:e2e
+        env:
+          NUXT_PUBLIC_DOCUMENTATION_BASE_URL: https://example.com/docs/
