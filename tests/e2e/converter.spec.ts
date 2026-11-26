@@ -293,6 +293,12 @@ test("mobile conversion feedback is visible and links to the output", async ({
   await page.goto("/converter");
   const input = page.getByRole("textbox", { name: "Data to convert" });
   const submit = page.getByRole("button", { name: "Convert data" });
+  await submit.click();
+  await expect(input).toBeFocused();
+  await expect(
+    page.getByText("Enter some exported dice roller data."),
+  ).toBeInViewport();
+
   await input.fill("{invalid");
   await submit.click();
   await expect(page.getByRole("alert")).toBeInViewport();

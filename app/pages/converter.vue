@@ -14,7 +14,12 @@ import type {
   SupportedDataVersion,
   TargetVersion,
 } from "@dice-roller/convertor";
-import type { AccordionItem, BreadcrumbItem, FormError } from "@nuxt/ui";
+import type {
+  AccordionItem,
+  BreadcrumbItem,
+  FormError,
+  FormErrorEvent,
+} from "@nuxt/ui";
 import { legacyExample } from "~/data/converter-example";
 
 definePageMeta({ toolArtwork: true });
@@ -227,6 +232,20 @@ async function revealFeedback() {
   }
 }
 
+async function onValidationError(event: FormErrorEvent) {
+  await nextTick();
+  const id = event.errors[0]?.id;
+  const field = id ? document.getElementById(id) : null;
+  // UForm may still be releasing its submission state on the first tick.
+  // The next animation frame runs after the controls have been re-enabled.
+  requestAnimationFrame(() => {
+    const input = document.querySelector<HTMLElement>('[name="input"]');
+    const target = field ?? input;
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: "center" });
+  });
+}
+
 function jumpToOutput() {
   outputHeading.value?.focus();
   outputHeading.value?.scrollIntoView({ block: "start" });
@@ -357,6 +376,7 @@ const help: AccordionItem[] = [
         aria-labelledby="conversion-options-heading"
         class="space-y-6"
         @submit="onSubmit"
+        @error="onValidationError"
       >
         <UCard as="section" aria-labelledby="conversion-options-heading">
           <h2 id="conversion-options-heading" class="sr-only">
