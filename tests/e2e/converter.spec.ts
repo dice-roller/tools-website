@@ -101,3 +101,28 @@ test("uploads Base64 data and copies converted output", async ({
     await output.inputValue(),
   );
 });
+
+for (const width of [1280, 375]) {
+  test(`converter output keeps its size at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/converter");
+    await page.getByRole("button", { name: "Load example" }).click();
+    const card = page.getByRole("region", { name: "Output", exact: true });
+    const empty = card.locator('[data-slot="root"]').filter({
+      has: page.getByText("Your converted data will appear here."),
+    });
+    const placeholder = empty.last();
+    await expect(placeholder).toBeVisible();
+    const before = await placeholder.boundingBox();
+    const cardBefore = await card.boundingBox();
+    await page.getByRole("button", { name: "Convert data" }).click();
+    const output = page.getByRole("textbox", { name: "Converted data" });
+    await expect(output).toBeVisible();
+    const after = await output.boundingBox();
+    const cardAfter = await card.boundingBox();
+
+    expect(after?.width).toBeCloseTo(before!.width, 0);
+    expect(after?.height).toBeCloseTo(before!.height, 0);
+    expect(cardAfter?.height).toBeCloseTo(cardBefore!.height, 0);
+  });
+}

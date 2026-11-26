@@ -538,24 +538,25 @@ const help: AccordionItem[] = [
               </div>
             </template>
 
-            <UTextarea
-              v-if="output"
-              :model-value="output"
-              aria-label="Converted data"
-              readonly
-              :rows="9"
-              class="w-full flex-1 font-mono"
-              :ui="{ base: 'min-h-64 resize-y' }"
-              spellcheck="false"
-            />
-            <UEmpty
-              v-else
-              icon="i-heroicons-document"
-              description="Your converted data will appear here."
-              variant="subtle"
-              size="xl"
-              class="min-h-64 flex-1"
-            />
+            <div class="relative min-h-64 flex-1">
+              <UTextarea
+                v-if="output"
+                :model-value="output"
+                aria-label="Converted data"
+                readonly
+                class="absolute inset-0 font-mono"
+                :ui="{ base: 'h-full resize-none' }"
+                spellcheck="false"
+              />
+              <UEmpty
+                v-else
+                icon="i-heroicons-document"
+                description="Your converted data will appear here."
+                variant="subtle"
+                size="xl"
+                class="absolute inset-0"
+              />
+            </div>
           </UCard>
         </div>
         <UAlert
