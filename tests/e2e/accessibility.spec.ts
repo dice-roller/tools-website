@@ -541,6 +541,12 @@ for (const mode of ["light", "dark"] as const) {
     await expect(
       page.getByRole("tabpanel", { name: "Text" }).getByRole("status"),
     ).toContainText("2d6+3:");
+    const preview = page.getByRole("button", {
+      name: "Preview roll 1: 2d6+3",
+      exact: true,
+    });
+    await preview.press("Enter");
+    await expect(preview).toHaveAttribute("aria-pressed", "true");
     await audit(page);
 
     await page.getByRole("tab", { name: "Code", exact: true }).click();

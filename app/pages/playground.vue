@@ -64,6 +64,68 @@ function defaultTextOptions() {
 }
 
 const latestRoll = shallowRef<Roll>();
+const previewRoll = shallowRef<(typeof historyRolls.value)[number]>();
+const displayedRoll = computed(() => previewRoll.value ?? latestRoll.value);
+const historyRolls = shallowRef(roller.history.rolls);
+const historySettings = new WeakMap<
+  (typeof historyRolls.value)[number],
+  {
+    id: number;
+    seed: number | undefined;
+    form: ReturnType<typeof snapshotRollSettings>;
+    engine: typeof roller.generator.engine;
+  }
+>();
+let nextHistoryRollId = 0;
+const historyHeading = useTemplateRef<HTMLElement>("historyHeading");
+const historyList = useTemplateRef<HTMLOListElement>("historyList");
+const historyTooltipUi = {
+  content: "h-auto max-w-64 py-2",
+  text: "whitespace-normal wrap-anywhere",
+};
+const historyRows = computed(() =>
+  historyRolls.value
+    .map((roll, index) => ({
+      roll,
+      id: historySettings.get(roll)?.id,
+      number: index + 1,
+      notation: roll.notation,
+      breakdown: textDefaults.present(roll.result),
+      total: roll.total,
+    }))
+    .reverse(),
+);
+async function clearHistory() {
+  previewRoll.value = undefined;
+  roller.history.clear();
+  historyRolls.value = roller.history.rolls;
+  await nextTick();
+  historyHeading.value?.focus();
+}
+
+async function removeHistoryRoll(number: number, rowIndex: number) {
+  if (previewRoll.value === historyRolls.value[number - 1]) {
+    previewRoll.value = undefined;
+  }
+  const remaining = historyRolls.value.filter(
+    (_, index) => index + 1 !== number,
+  );
+  roller.history.clear();
+  for (const roll of remaining) {
+    roller.history.add(roll);
+  }
+  historyRolls.value = roller.history.rolls;
+
+  await nextTick();
+  const removeButtons =
+    historyList.value?.querySelectorAll<HTMLButtonElement>(
+      "[data-remove-roll]",
+    );
+  const nextButton =
+    removeButtons?.[Math.min(rowIndex, removeButtons.length - 1)];
+  (nextButton ?? historyHeading.value)?.focus();
+}
+
 const notationError = ref("");
 const variablesError = ref("");
 const seedError = ref("");
@@ -138,12 +200,12 @@ const dataFormats = [
   { label: "Concise", value: "concise" },
 ] as const;
 const dataResult = computed(() => {
-  if (!latestRoll.value) {
+  if (!displayedRoll.value) {
     return { code: "", error: "" };
   }
 
   try {
-    const full = latestRoll.value.export();
+    const full = displayedRoll.value.export();
     const data =
       dataFormat.value === "concise"
         ? convert(full, 1, { format: "concise" })
@@ -183,6 +245,35 @@ const state = reactive({
   ...defaultConfiguration(),
 });
 
+function snapshotRollSettings() {
+  const {
+    notation,
+    engine,
+    seed,
+    variables,
+    maxQty,
+    maxIterations,
+    maxGeneratedRolls,
+  } = state;
+  return {
+    notation,
+    engine,
+    seed,
+    variables,
+    maxQty,
+    maxIterations,
+    maxGeneratedRolls,
+  };
+}
+
+function rerollFromHistory(roll: (typeof historyRolls.value)[number]) {
+  const original = historySettings.get(roll);
+  if (!original) return;
+
+  Object.assign(state, original.form);
+  performRoll(original.engine);
+}
+
 function resetConfiguration() {
   Object.assign(state, defaultConfiguration());
   // Apply the reset engine and limits on the next roll, preserving history.
@@ -199,7 +290,7 @@ const textPresenter = computed(
 );
 const svgPresenter = computed(() => new SvgPresenter(state.svgOptions));
 const textResult = computed(
-  () => latestRoll.value?.present(textPresenter.value) ?? "",
+  () => displayedRoll.value?.present(textPresenter.value) ?? "",
 );
 
 const selectedPresenter = computed(() => presenterDefinitions[state.presenter]);
@@ -267,7 +358,7 @@ function resetRandomSequence() {
 }
 
 const visualResult = computed(() => {
-  if (!latestRoll.value) {
+  if (!displayedRoll.value) {
     return { output: "", error: "" };
   }
 
@@ -275,7 +366,7 @@ const visualResult = computed(() => {
     return {
       output:
         state.presenter === "SVG"
-          ? latestRoll.value.present(svgPresenter.value)
+          ? displayedRoll.value.present(svgPresenter.value)
           : textResult.value,
       error: "",
     };
@@ -316,10 +407,8 @@ for (const key of limitKeys) {
   );
 }
 
-function readVariableData(): RollInputData {
-  const parsed: unknown = state.variables.trim()
-    ? JSON.parse(state.variables)
-    : {};
+function readVariableData(variables = state.variables): RollInputData {
+  const parsed: unknown = variables.trim() ? JSON.parse(variables) : {};
 
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("Variables must be a JSON object.");
@@ -331,8 +420,14 @@ function readVariableData(): RollInputData {
 
 const codeResult = computed(() => {
   try {
-    const seed =
-      seedSupported.value && state.seed.trim() ? Number(state.seed) : undefined;
+    const original =
+      previewRoll.value && historySettings.get(previewRoll.value);
+    const form = original?.form ?? state;
+    const seed = original
+      ? original.seed
+      : seedSupported.value && state.seed.trim()
+        ? Number(state.seed)
+        : undefined;
     if (
       seed !== undefined &&
       (!Number.isInteger(seed) || seed < -2147483648 || seed > 2147483647)
@@ -340,9 +435,9 @@ const codeResult = computed(() => {
       throw new Error("Enter a valid signed 32-bit integer in the Seed field.");
     }
     const limits = {
-      maxQty: Number(state.maxQty),
-      maxIterations: Number(state.maxIterations),
-      maxGeneratedRolls: Number(state.maxGeneratedRolls),
+      maxQty: Number(form.maxQty),
+      maxIterations: Number(form.maxIterations),
+      maxGeneratedRolls: Number(form.maxGeneratedRolls),
     };
     if (
       limitKeys.some(
@@ -355,13 +450,13 @@ const codeResult = computed(() => {
     }
     return {
       ...buildPlaygroundCode({
-        notation: state.notation,
-        engine: state.engine,
+        notation: form.notation,
+        engine: form.engine,
         defaultEngine,
         seed,
         limits,
         defaultLimits,
-        data: readVariableData(),
+        data: readVariableData(form.variables),
         presenter: state.presenter,
         presenterOptions: state[selectedPresenter.value.stateKey],
         presenterDefaults:
@@ -384,6 +479,10 @@ const codeResult = computed(() => {
 });
 
 function onSubmit() {
+  performRoll();
+}
+
+function performRoll(resumeEngine?: typeof roller.generator.engine) {
   notationError.value = "";
   variablesError.value = "";
   seedError.value = "";
@@ -440,10 +539,11 @@ function onSubmit() {
   }
 
   try {
-    // Keep the engine instance unless its selection or seed changes.
-    // Reconfiguring limits alone must not restart the random sequence.
-    const engineChanged =
-      resetEngine || state.engine !== activeEngine || seed !== activeSeed;
+    // History re-rolls resume their saved engine. Ordinary rolls restart
+    // the sequence only when the engine or seed changes or is reset.
+    const engineChanged = resumeEngine
+      ? resumeEngine !== roller.generator.engine
+      : resetEngine || state.engine !== activeEngine || seed !== activeSeed;
     if (
       engineChanged ||
       limitKeys.some((key) => roller.limits[key] !== limits[key])
@@ -451,21 +551,32 @@ function onSubmit() {
       const nextRoller = new Roller({
         limits,
         engines: engineRegistry,
-        engine: engineChanged
-          ? { name: state.engine, seed }
-          : roller.generator.engine,
+        engine:
+          resumeEngine ??
+          (engineChanged
+            ? { name: state.engine, seed }
+            : roller.generator.engine),
       });
       for (const roll of roller.history) {
         nextRoller.history.add(roll);
       }
       roller = nextRoller;
-      activeEngine = state.engine;
-      activeSeed = seed;
-      resetEngine = false;
     }
+    activeEngine = state.engine;
+    activeSeed = seed;
+    resetEngine = false;
 
     // Roller records each successful roll in its own history.
-    latestRoll.value = roller.roll(state.notation, { data });
+    const roll = roller.roll(state.notation, { data });
+    historySettings.set(roll, {
+      id: nextHistoryRollId++,
+      seed,
+      form: snapshotRollSettings(),
+      engine: roller.generator.engine,
+    });
+    latestRoll.value = roll;
+    previewRoll.value = undefined;
+    historyRolls.value = roller.history.rolls;
   } catch (cause) {
     notationError.value =
       cause instanceof Error ? cause.message : "An unexpected error occurred.";
@@ -1246,7 +1357,7 @@ const statistics = [
                       </template>
                     </template>
                     <UEmpty
-                      v-else-if="!latestRoll"
+                      v-else-if="!displayedRoll"
                       icon="i-lucide-dices"
                       title="No rolls yet"
                       description="Enter some notation and roll the dice to see your results."
@@ -1364,10 +1475,16 @@ const statistics = [
                       <UIcon name="i-lucide-history" class="size-5" />
                       <h2
                         id="playground-history-heading"
+                        ref="historyHeading"
+                        tabindex="-1"
                         class="font-serif text-xl font-semibold text-highlighted"
                       >
                         Roll history
                       </h2>
+                      <UBadge color="neutral" variant="soft" role="status">
+                        {{ historyRows.length }}
+                        {{ historyRows.length === 1 ? "roll" : "rolls" }}
+                      </UBadge>
                     </div>
                     <UButton
                       label="Clear history"
@@ -1375,14 +1492,121 @@ const statistics = [
                       type="button"
                       color="neutral"
                       variant="ghost"
-                      disabled
+                      :disabled="!historyRows.length"
+                      @click="clearHistory"
                     />
                   </div>
                 </template>
 
-                <p class="text-sm text-muted">
-                  Roll history display is not available yet.
-                </p>
+                <ol
+                  v-if="historyRows.length"
+                  ref="historyList"
+                  reversed
+                  role="list"
+                  class="divide-y divide-default"
+                >
+                  <li
+                    v-for="(row, rowIndex) in historyRows"
+                    :key="row.id"
+                    class="grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 rounded-md px-2 py-2"
+                    :class="
+                      previewRoll === row.roll
+                        ? 'bg-primary/10 ring-1 ring-inset ring-primary/40'
+                        : 'hover:bg-elevated/50 focus-within:bg-elevated'
+                    "
+                    @click="
+                      previewRoll =
+                        previewRoll === row.roll ? undefined : row.roll
+                    "
+                  >
+                    <UBadge color="neutral" variant="soft">
+                      <span class="sr-only">Roll </span>{{ row.number }}
+                    </UBadge>
+                    <dl
+                      class="col-start-2 row-start-1 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]"
+                    >
+                      <div class="min-w-0">
+                        <dt class="sr-only">Notation</dt>
+                        <dd>
+                          <UTooltip
+                            :text="row.notation"
+                            arrow
+                            :ui="historyTooltipUi"
+                          >
+                            <UButton
+                              :label="row.notation"
+                              :aria-label="`Preview roll ${row.number}: ${row.notation}`"
+                              :aria-pressed="previewRoll === row.roll"
+                              type="button"
+                              color="neutral"
+                              variant="link"
+                              class="max-w-full p-0 text-base text-highlighted"
+                              :ui="{ label: 'truncate' }"
+                            />
+                          </UTooltip>
+                        </dd>
+                      </div>
+                      <div
+                        class="col-span-2 row-start-2 min-w-0 lg:col-span-1 lg:col-start-2 lg:row-start-1"
+                      >
+                        <dt class="sr-only">Roll breakdown</dt>
+                        <dd>
+                          <UTooltip
+                            :text="row.breakdown"
+                            arrow
+                            :ui="historyTooltipUi"
+                          >
+                            <span
+                              tabindex="0"
+                              class="block w-fit max-w-full truncate rounded font-mono text-sm text-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                            >
+                              {{ row.breakdown }}
+                            </span>
+                          </UTooltip>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="sr-only">Total</dt>
+                        <dd class="break-all">
+                          <UBadge
+                            color="primary"
+                            variant="solid"
+                            size="xl"
+                            class="min-w-10 justify-center font-semibold tabular-nums"
+                          >
+                            {{ row.total }}
+                          </UBadge>
+                        </dd>
+                      </div>
+                    </dl>
+                    <div
+                      class="col-start-3 row-start-1 ml-2 flex items-center sm:ml-6"
+                    >
+                      <UTooltip text="Re-roll" arrow>
+                        <UButton
+                          icon="i-lucide-dices"
+                          :aria-label="`Re-roll roll ${row.number}`"
+                          type="button"
+                          color="neutral"
+                          variant="ghost"
+                          @click.stop="rerollFromHistory(row.roll)"
+                        />
+                      </UTooltip>
+                      <UTooltip text="Remove roll" arrow>
+                        <UButton
+                          icon="i-lucide-trash-2"
+                          :aria-label="`Remove roll ${row.number}`"
+                          type="button"
+                          color="neutral"
+                          variant="ghost"
+                          data-remove-roll
+                          @click.stop="removeHistoryRoll(row.number, rowIndex)"
+                        />
+                      </UTooltip>
+                    </div>
+                  </li>
+                </ol>
+                <p v-else class="text-sm text-muted">Rolls will appear here.</p>
               </UCard>
             </div>
           </div>

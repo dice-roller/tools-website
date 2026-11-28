@@ -76,6 +76,215 @@ test("playground rolls notation without switching the active tab", async ({
   await expect(result).toHaveText(/^2\+3:.*= 5$/);
 });
 
+test("playground lists successful rolls with labelled details", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/playground");
+  const history = page.getByRole("region", { name: "Roll history" });
+  const notation = page.getByLabel("Notation", { exact: true });
+
+  await expect(history.getByText("0 rolls")).toBeVisible();
+
+  for (const value of ["2+3", "20d1", "2d6+"]) {
+    await notation.fill(value);
+    await notation.press("Enter");
+  }
+
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(history.getByText("2 rolls")).toBeVisible();
+  const rows = history.locator("ol[reversed] > li");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first().locator("dt")).toHaveText([
+    "Notation",
+    "Roll breakdown",
+    "Total",
+  ]);
+  const details = rows.first().locator("dd");
+  await expect(details.nth(0)).toHaveText("20d1");
+  await expect(details.nth(1)).toContainText("[1, 1, 1");
+  await expect(details.nth(1).locator("span")).toHaveCSS(
+    "text-overflow",
+    "ellipsis",
+  );
+  await expect(details.nth(2)).toHaveText("20");
+  await expect(rows.last().locator("dd")).toHaveText(["2+3", "2+3", "5"]);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
+});
+
+test("playground removes and clears history without changing the result", async ({
+  page,
+}) => {
+  await page.goto("/playground");
+  const history = page.getByRole("region", { name: "Roll history" });
+  const count = history.getByRole("status");
+  const clear = history.getByRole("button", { name: "Clear history" });
+  const heading = history.getByRole("heading", { name: "Roll history" });
+  const notation = page.getByLabel("Notation", { exact: true });
+  const result = page
+    .getByRole("tabpanel", { name: "Text" })
+    .getByRole("status");
+  const entries = history.locator("li dd:first-of-type");
+
+  await expect(clear).toBeDisabled();
+  await page.getByRole("tab", { name: "Text", exact: true }).click();
+  for (const value of ["1+1", "2+2", "3+3"]) {
+    await notation.fill(value);
+    await notation.press("Enter");
+  }
+  await expect(count).toHaveText("3 rolls");
+
+  await history.getByRole("button", { name: "Remove roll 2" }).press("Enter");
+  await expect(count).toHaveText("2 rolls");
+  await expect(entries).toHaveText(["3+3", "3+3", "6", "1+1", "1+1", "2"]);
+  await expect(
+    history.getByRole("button", { name: "Remove roll 1" }),
+  ).toBeFocused();
+
+  await history.getByRole("button", { name: "Remove roll 2" }).click();
+  await expect(count).toHaveText("1 roll");
+  await expect(result).toHaveText(/^3\+3:.*= 6$/);
+
+  await clear.press("Enter");
+  await expect(count).toHaveText("0 rolls");
+  await expect(clear).toBeDisabled();
+  await expect(heading).toBeFocused();
+  await expect(result).toHaveText(/^3\+3:.*= 6$/);
+
+  await notation.fill("4+4");
+  await notation.press("Enter");
+  await expect(entries).toHaveText(["4+4", "4+4", "8"]);
+
+  await history.getByRole("button", { name: "Remove roll 1" }).click();
+  await expect(count).toHaveText("0 rolls");
+  await expect(heading).toBeFocused();
+});
+
+test("history previews stored results until a successful roll", async ({
+  page,
+}) => {
+  await page.goto("/playground");
+  const notation = page.getByLabel("Notation", { exact: true });
+  const history = page.getByRole("region", { name: "Roll history" });
+  const preview = history.getByRole("button", { name: "Preview roll 1: 1+1" });
+  const result = page
+    .getByRole("tabpanel", { name: "Text" })
+    .getByRole("status");
+
+  await page.getByRole("tab", { name: "Text", exact: true }).click();
+  for (const value of ["1+1", "2+2"]) {
+    await notation.fill(value);
+    await notation.press("Enter");
+  }
+
+  await preview.press("Enter");
+  await expect(preview).toHaveAttribute("aria-pressed", "true");
+  await expect(notation).toHaveValue("2+2");
+  await expect(result).toHaveText(/^1\+1:.*= 2$/);
+  await expect(history.getByRole("status")).toHaveText("2 rolls");
+
+  await notation.fill("2d6+");
+  await notation.press("Enter");
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(result).toHaveText(/^1\+1:.*= 2$/);
+  await expect(preview).toHaveAttribute("aria-pressed", "true");
+
+  await notation.fill("3+3");
+  await notation.press("Enter");
+  await expect(result).toHaveText(/^3\+3:.*= 6$/);
+  await expect(preview).toHaveAttribute("aria-pressed", "false");
+
+  await history.getByRole("listitem").last().locator("dd").last().click();
+  await expect(preview).toHaveAttribute("aria-pressed", "true");
+  await history
+    .getByRole("button", { name: "Re-roll roll 2", exact: true })
+    .click();
+  await expect(result).toHaveText(/^2\+2:.*= 4$/);
+  await expect(preview).toHaveAttribute("aria-pressed", "false");
+
+  await preview.click();
+  await history
+    .getByRole("button", { name: "Remove roll 1", exact: true })
+    .click();
+  await expect(result).toHaveText(/^2\+2:.*= 4$/);
+});
+
+test("history re-rolls restore the form and resume the original random sequence", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 812 });
+  await page.goto("/playground");
+  const notation = page.getByLabel("Notation", { exact: true });
+  const engine = page.getByLabel("Random engine", { exact: true });
+  const seed = page.getByRole("textbox", { name: "Seed", exact: true });
+  const presenter = page.getByLabel("Presenter", { exact: true });
+  const result = page
+    .getByRole("tabpanel", { name: "Text" })
+    .getByRole("status");
+  const history = page.getByRole("region", { name: "Roll history" });
+  const original = "6d20 + $bonus";
+  const data = { bonus: 5 };
+  const expected = new Roller({ engine: { name: "mersenne", seed: 42 } });
+  const nextExpected = () =>
+    expected.roll(original, { data }).present(presenters.defaultTextPresenter);
+
+  await page.getByRole("tab", { name: "Text", exact: true }).click();
+  await selectMenuOption(page, engine, "Mersenne Twister");
+  await seed.fill("42");
+  await page.getByRole("button", { name: "Variables", exact: true }).click();
+  const variables = page.getByLabel("Variables (JSON data)", { exact: true });
+  await variables.fill(JSON.stringify(data));
+  await page.getByRole("button", { name: "Roll limits", exact: true }).click();
+  const maxQty = page.getByLabel("Maximum dice quantity", { exact: true });
+  await maxQty.fill("10");
+  await notation.fill(original);
+  await notation.press("Enter");
+  await expect(result).toHaveText(nextExpected());
+
+  await selectMenuOption(page, engine, "Crypto");
+  await selectMenuOption(page, presenter, "SVG");
+  const options = page.getByRole("button", {
+    name: "Presenter options",
+    exact: true,
+  });
+  const back = page.getByRole("button", {
+    name: "Back to configuration",
+    exact: true,
+  });
+  const size = page.getByLabel("Dice size", { exact: true });
+  await options.click();
+  await size.fill("72");
+  await back.click();
+  await variables.fill("{}");
+  await maxQty.fill("1");
+  await notation.fill("d6");
+  await notation.press("Enter");
+
+  await history
+    .getByRole("button", { name: "Re-roll roll 1", exact: true })
+    .click();
+  await expect(result).toHaveText(nextExpected());
+  await expect(notation).toHaveValue(original);
+  await expect(engine).toContainText("Mersenne Twister");
+  await expect(seed).toHaveValue("42");
+  await expect(presenter).toContainText("SVG");
+  await expect(variables).toHaveValue(JSON.stringify(data));
+  await expect(maxQty).toHaveValue("10");
+
+  // Both the main roll button and earlier history entries share this sequence.
+  await notation.press("Enter");
+  await expect(result).toHaveText(nextExpected());
+  await history
+    .getByRole("button", { name: "Re-roll roll 1", exact: true })
+    .press("Enter");
+  await expect(result).toHaveText(nextExpected());
+  await expect(history.getByRole("status")).toHaveText("5 rolls");
+  await options.click();
+  await expect(size).toHaveValue("72");
+});
+
 test("playground reports library errors and retains the last successful roll", async ({
   page,
 }) => {
