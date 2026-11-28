@@ -470,12 +470,20 @@ for (const mode of ["light", "dark"] as const) {
     await expect(page.getByRole("menu")).toBeVisible();
     await audit(page);
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: "Collapse configuration" }).click();
-    await expect(
-      page.getByRole("button", { name: "Expand configuration" }),
-    ).toHaveAttribute("aria-expanded", "false");
+    const configuration = page.getByRole("button", {
+      name: "Configuration",
+      exact: true,
+    });
+    const dialog = page.getByRole("dialog", {
+      name: "Configuration",
+      exact: true,
+    });
+    const done = dialog.getByRole("button", { name: "Done", exact: true });
+    await configuration.click();
+    await expect(dialog).toBeVisible();
     await audit(page);
-    await page.getByRole("button", { name: "Expand configuration" }).click();
+    await done.click();
+    await expect(dialog).toBeHidden();
 
     const notation = page.getByLabel("Notation", { exact: true });
     await notation.fill("2d6+3");
@@ -501,6 +509,35 @@ for (const mode of ["light", "dark"] as const) {
     await notation.press("Enter");
     await expect(page.getByRole("alert")).toBeVisible();
     await audit(page);
+
+    await configuration.click();
+    await page
+      .getByRole("button", { name: "Roll limits", exact: true })
+      .click();
+    const quantity = page.getByRole("textbox", {
+      name: "Maximum dice quantity",
+      exact: true,
+    });
+    await quantity.fill("0");
+    await done.click();
+    await notation.fill("d6");
+    await notation.press("Enter");
+    await expect(quantity).toHaveAttribute("aria-invalid", "true");
+    await audit(page);
+    await quantity.fill("999");
+    await page.getByLabel("Random engine", { exact: true }).click();
+    await page
+      .getByRole("option", { name: "Mersenne Twister", exact: true })
+      .click();
+    const seed = page.getByRole("textbox", { name: "Seed", exact: true });
+    await seed.fill("invalid");
+    await done.click();
+    await notation.press("Enter");
+    await expect(seed).toHaveAttribute("aria-invalid", "true");
+    await audit(page);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
   });
 }
 

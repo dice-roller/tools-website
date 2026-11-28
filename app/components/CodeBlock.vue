@@ -12,8 +12,14 @@ const props = withDefaults(
     filename?: string;
     icon?: string;
     copyLabel?: string;
+    announce?: boolean;
   }>(),
-  { copyLabel: "Copy code" },
+  {
+    filename: undefined,
+    icon: undefined,
+    copyLabel: "Copy code",
+    announce: false,
+  },
 );
 
 const colorMode = useColorMode();
@@ -34,6 +40,7 @@ const highlighted = computed(() =>
 const HighlightedCode = () =>
   h(
     "code",
+    props.announce ? { role: "status" } : {},
     highlighted.value
       ? highlighted.value.tokens.flatMap((line, index) => [
           ...line.map((token) =>
