@@ -1519,7 +1519,7 @@ const statistics = computed(() =>
                       <UModal
                         title="Share Playground"
                         description="Anyone with the link can view the current settings and roll history."
-                        :ui="{ description: 'text-toned' }"
+                        :ui="{ description: 'text-default' }"
                       >
                         <UButton
                           label="Share"
