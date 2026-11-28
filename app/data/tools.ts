@@ -26,6 +26,7 @@ export const tools: readonly Tool[] = [
   },
   {
     id: "ast",
+    path: "/ast",
     title: "AST explorer",
     description:
       "Enter dice notation and explore its parsed abstract syntax tree (AST) to see how expressions are structured.",

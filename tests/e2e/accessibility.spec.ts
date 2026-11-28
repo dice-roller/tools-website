@@ -71,7 +71,7 @@ for (const mode of ["light", "dark"] as const) {
         /AST explorer.*Planned/,
       ]);
       const ast = nav.getByRole("link", { name: /AST explorer/ });
-      await expect(ast).toHaveAttribute("href", /#ast$/);
+      await expect(ast).toHaveAttribute("href", /\/ast\/?$/);
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),
       ).toBeLessThanOrEqual(1024);
@@ -81,7 +81,7 @@ for (const mode of ["light", "dark"] as const) {
         .press("Enter");
       await expect(page).toHaveURL(/\/converter\/?$/);
       await ast.press("Enter");
-      await expect(page).toHaveURL(/#ast$/);
+      await expect(page).toHaveURL(/\/ast\/?$/);
     });
 
     test("mobile menu meets automated WCAG A/AA rules", async ({ page }) => {
@@ -667,3 +667,57 @@ test("playground links to the configured notation guide", async ({ page }) => {
     page.getByRole("button", { name: "About Notation", exact: true }),
   ).toBeVisible();
 });
+
+for (const mode of ["light", "dark"] as const) {
+  test(`AST explorer preview is accessible in ${mode} mode`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await openHomepage(page, mode);
+    const card = page.getByRole("article").filter({
+      has: page.getByRole("heading", { name: "AST explorer", exact: true }),
+    });
+    await expect(card.getByText("Planned", { exact: true })).toBeVisible();
+    await card.getByRole("link", { name: "Open AST explorer" }).click();
+    await expect(page).toHaveURL(/\/ast\/?$/);
+    await expect(
+      page.getByRole("heading", { name: "AST explorer", exact: true }),
+    ).toBeVisible();
+    const preview = page.getByRole("region", {
+      name: "A preview of the AST explorer",
+    });
+    await expect(preview.getByText("Planned", { exact: true })).toBeVisible();
+
+    const image = preview.getByRole("img", { name: /Design concept/ });
+    await expect(image).toHaveAttribute(
+      "src",
+      new RegExp(`ast-preview-${mode}\\.webp$`),
+    );
+    expect(
+      await image.evaluate(async (element: HTMLImageElement) => {
+        await element.decode();
+        return element.naturalWidth;
+      }),
+    ).toBeGreaterThan(0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+    await audit(page);
+
+    const otherMode = mode === "light" ? "dark" : "light";
+    await page
+      .getByRole("button", { name: `Switch to ${otherMode} mode` })
+      .click();
+    await expect(image).toHaveAttribute(
+      "src",
+      new RegExp(`ast-preview-${otherMode}\\.webp$`),
+    );
+    expect(
+      await image.evaluate(async (element: HTMLImageElement) => {
+        await element.decode();
+        return element.naturalWidth;
+      }),
+    ).toBeGreaterThan(0);
+    await audit(page);
+  });
+}
