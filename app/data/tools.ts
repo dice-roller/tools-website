@@ -18,11 +18,11 @@ export const tools: readonly Tool[] = [
   },
   {
     id: "playground",
+    path: "/playground",
     title: "Dice playground",
     description:
       "An advanced interactive roller with configurable presenters, random number generators, variables and limits.",
     icon: "i-lucide-dices",
-    status: "Planned",
   },
   {
     id: "ast",

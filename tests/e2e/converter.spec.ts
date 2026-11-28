@@ -91,6 +91,7 @@ test("uploads Base64 data and copies converted output", async ({
   }
   await page.goto("/converter");
   const base64 = Buffer.from(JSON.stringify(legacyExample)).toString("base64");
+  await expect(page.getByRole("button", { name: "Upload file" })).toBeEnabled();
   await page.locator('input[type="file"]').setInputFiles({
     name: "roll.txt",
     mimeType: "text/plain",
@@ -269,6 +270,7 @@ test("download names retain the uploaded stem and describe the output", async ({
     return (await pending).suggestedFilename();
   }
 
+  await expect(page.getByRole("button", { name: "Upload file" })).toBeEnabled();
   await page.locator('input[type="file"]').setInputFiles({
     name: "character.history.json",
     mimeType: "application/json",

@@ -43,11 +43,11 @@ for (const mode of ["light", "dark"] as const) {
   test.describe(`${mode} colour mode`, () => {
     test("homepage meets automated WCAG A/AA rules", async ({ page }) => {
       await openHomepage(page, mode);
-      const hero = page.locator(".home-hero");
-      await expect(hero).toBeVisible();
+      await expect(page.locator(".home-hero")).toBeVisible();
+      const artwork = page.locator(".home-hero-artwork");
       // Ensure the decorative background is bundled and actually loads.
       expect(
-        await hero.evaluate(async (element) => {
+        await artwork.evaluate(async (element) => {
           const background = getComputedStyle(element).backgroundImage;
           const url = background.match(/url\(["']?([^"')]+)["']?\)/)?.[1];
           if (!url) return false;
@@ -247,7 +247,11 @@ test("converter is reachable from the homepage", async ({ page }) => {
     has: page.getByRole("heading", { name: "Data converter", exact: true }),
   });
   await expect(card).not.toContainText(/coming soon|planned|preview/i);
-  await expect(page.getByText("Planned", { exact: true })).toHaveCount(2);
+  const playground = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "Dice playground", exact: true }),
+  });
+  await expect(playground).not.toContainText(/coming soon|planned/i);
+  await expect(page.getByText("Planned", { exact: true })).toHaveCount(1);
   await page
     .getByRole("link", { name: "Open data converter", exact: true })
     .click();
@@ -442,4 +446,221 @@ test("shared GitHub links point to the Dice Roller organisation", async ({
   await expect(
     page.getByRole("contentinfo").getByRole("link", { name: "GitHub" }),
   ).toHaveAttribute("href", "https://github.com/dice-roller");
+});
+
+for (const mode of ["light", "dark"] as const) {
+  test(`playground preview reflows and is accessible in ${mode} mode`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: mode });
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto("/playground");
+    await expect(
+      page.getByRole("heading", { name: "Dice playground", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator("html")).toHaveClass(new RegExp(mode));
+    await expect(
+      page.getByRole("button", { name: "Roll dice", exact: true }),
+    ).toBeEnabled();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+    await audit(page);
+    const examples = page.getByRole("button", {
+      name: "Examples",
+      exact: true,
+    });
+    await examples.click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await audit(page);
+    await page.keyboard.press("Escape");
+    const configuration = page.getByRole("button", {
+      name: "Configuration",
+      exact: true,
+    });
+    const dialog = page.getByRole("dialog", {
+      name: "Configuration",
+      exact: true,
+    });
+    const done = dialog.getByRole("button", { name: "Done", exact: true });
+    await configuration.click();
+    await expect(dialog).toBeVisible();
+    await audit(page);
+    await dialog
+      .getByRole("button", { name: "Presenter options", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", { name: "Flag symbols", exact: true })
+      .click();
+    await expect(dialog.getByLabel("Drop", { exact: true })).toBeVisible();
+    await audit(page);
+    const back = dialog.getByRole("button", {
+      name: "Back to configuration",
+      exact: true,
+    });
+    const options = dialog.getByRole("button", {
+      name: "Presenter options",
+      exact: true,
+    });
+    await back.click();
+    await expect(options).toBeFocused();
+    const presenter = dialog.getByLabel("Presenter", { exact: true });
+    await presenter.click();
+    await page.getByRole("option", { name: "SVG", exact: true }).click();
+    await expect(presenter).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      page.getByRole("listbox", { includeHidden: true }),
+    ).toHaveCount(0);
+    await options.click();
+    await expect(back).toBeFocused();
+    await expect(dialog.getByLabel("Dice size", { exact: true })).toBeVisible();
+    await audit(page);
+    await dialog
+      .getByRole("button", { name: "Pick stroke colour", exact: true })
+      .click();
+    const colourPicker = page.getByRole("dialog", {
+      name: "Pick stroke colour",
+    });
+    await expect(colourPicker).toBeVisible();
+    await audit(page);
+    await colourPicker
+      .getByRole("button", { name: "Done", exact: true })
+      .click();
+    await expect(colourPicker).toBeHidden();
+    await back.click();
+    await expect(options).toBeFocused();
+    await presenter.click();
+    await page.getByRole("option", { name: "Text", exact: true }).click();
+    await expect(presenter).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      page.getByRole("listbox", { includeHidden: true }),
+    ).toHaveCount(0);
+    await done.click();
+    await expect(dialog).toBeHidden();
+
+    const notation = page.getByLabel("Notation", { exact: true });
+    await notation.fill("2d6+3");
+    await notation.press("Enter");
+    await page.getByRole("tab", { name: "Text", exact: true }).click();
+    await expect(
+      page.getByRole("tabpanel", { name: "Text" }).getByRole("status"),
+    ).toContainText("2d6+3:");
+    const preview = page.getByRole("button", {
+      name: "Preview roll 1: 2d6+3",
+      exact: true,
+    });
+    await preview.press("Enter");
+    await expect(preview).toHaveAttribute("aria-pressed", "true");
+    await audit(page);
+    const share = page.getByRole("button", { name: "Share", exact: true });
+    await share.press("Enter");
+    const shareDialog = page.getByRole("dialog", { name: "Share Playground" });
+    await expect(
+      shareDialog.getByRole("textbox", { name: "Share link" }),
+    ).toHaveValue(/#play=v2\./);
+    await audit(page);
+    await page.keyboard.press("Escape");
+    await expect(shareDialog).toBeHidden();
+    await expect(share).toBeFocused();
+    await page
+      .getByRole("button", { name: "About Average", exact: true })
+      .press("Enter");
+    await expect(page.getByRole("tooltip")).toContainText("statistical mean");
+    await audit(page);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toBeHidden();
+
+    await page.getByRole("tab", { name: "Code", exact: true }).click();
+    await expect(
+      page.getByRole("tabpanel", { name: "Code" }).locator("pre code"),
+    ).toContainText("const result = new Roll");
+    await audit(page);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+
+    await page.getByRole("tab", { name: "Data", exact: true }).click();
+    const code = page
+      .getByRole("tabpanel", { name: "Data" })
+      .locator("pre code");
+    await expect(code).toContainText('"notation": "2d6+3"');
+    await expect(code.locator("span[style]")).not.toHaveCount(0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+    await audit(page);
+
+    await notation.fill("2d6+");
+    await notation.press("Enter");
+    await expect(page.getByRole("alert")).toBeVisible();
+    await audit(page);
+
+    await configuration.click();
+    await page
+      .getByRole("button", { name: "Roll limits", exact: true })
+      .click();
+    const quantity = page.getByRole("textbox", {
+      name: "Maximum dice quantity",
+      exact: true,
+    });
+    await quantity.fill("0");
+    await done.click();
+    await notation.fill("d6");
+    await notation.press("Enter");
+    await expect(quantity).toHaveAttribute("aria-invalid", "true");
+    await audit(page);
+    await quantity.fill("999");
+    await page.getByLabel("Random engine", { exact: true }).click();
+    await page
+      .getByRole("option", { name: "Mersenne Twister", exact: true })
+      .click();
+    const seed = page.getByRole("textbox", { name: "Seed", exact: true });
+    await seed.fill("invalid");
+    await done.click();
+    await notation.press("Enter");
+    await expect(seed).toHaveAttribute("aria-invalid", "true");
+    await audit(page);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+  });
+}
+
+for (const mode of ["light", "dark"] as const) {
+  test(`playground artwork opacity is isolated in ${mode} mode`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: mode });
+    await page.goto("/playground");
+    await expect(page.locator("html")).toHaveClass(new RegExp(mode));
+    await expect(page.locator("html")).toHaveCSS("opacity", "1");
+    await expect(page.locator(".playground-artwork")).toHaveCSS(
+      "opacity",
+      mode === "light" ? "0.23" : "0.75",
+    );
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(page.locator("html")).toHaveCSS("opacity", "1");
+  });
+}
+
+test("playground links to the configured notation guide", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/playground");
+  const documentationBaseUrl =
+    process.env.NUXT_PUBLIC_DOCUMENTATION_BASE_URL ??
+    "https://dice-roller.github.io/documentation/";
+  const guide = page.getByRole("link", {
+    name: "Notation guide (opens in a new tab)",
+  });
+  await expect(guide).toBeVisible();
+  await expect(guide).toHaveAttribute(
+    "href",
+    new URL("guide/notation/", `${documentationBaseUrl.replace(/\/+$/, "")}/`)
+      .href,
+  );
+  await expect(guide).toHaveAttribute("target", "_blank");
+  await expect(page.getByLabel("Notation", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "About Notation", exact: true }),
+  ).toBeVisible();
 });

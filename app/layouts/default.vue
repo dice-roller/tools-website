@@ -4,9 +4,6 @@ import { githubOrganisationUrl, tools } from "~/data/tools";
 
 const documentationUrl = useRuntimeConfig().public.documentationBaseUrl;
 
-const route = useRoute();
-const showToolArtwork = computed(() => route.meta.toolArtwork === true);
-
 const items: NavigationMenuItem[] = [
   { label: "Home", to: "/", exact: true },
   {
@@ -36,7 +33,6 @@ const mobileItems: NavigationMenuItem[] = [
 
 <template>
   <div class="relative isolate">
-    <div v-if="showToolArtwork" class="tool-artwork" aria-hidden="true" />
     <a
       href="#main-content"
       class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-100 focus:rounded-md focus:bg-default focus:p-3 focus:text-highlighted"
@@ -109,31 +105,3 @@ const mobileItems: NavigationMenuItem[] = [
     </UFooter>
   </div>
 </template>
-
-<style scoped>
-.tool-artwork {
-  position: absolute;
-  z-index: -1;
-  top: 0;
-  right: 0;
-  width: min(100%, 60rem);
-  height: 20rem;
-  pointer-events: none;
-  background-image: url("~/assets/images/home-background.webp");
-  background-size: cover;
-  background-position: center right;
-  background-repeat: no-repeat;
-  opacity: 0.19;
-  mask-image:
-    linear-gradient(to right, transparent, black 55%),
-    linear-gradient(to bottom, black 35%, transparent);
-  mask-composite: intersect;
-}
-
-@media (max-width: 640px) {
-  .tool-artwork {
-    opacity: 0.11;
-    height: 16rem;
-  }
-}
-</style>

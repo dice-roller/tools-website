@@ -27,8 +27,11 @@ Games should be for everyone. Follow [CONTRIBUTING.md](CONTRIBUTING.md), and tar
 - Extend Playwright and axe-core coverage for new routes and interactive states. Never disable an accessibility rule or exclude an element simply to pass CI. Document any justified exception and its follow-up.
 - Automated checks are not proof of WCAG conformance. Review keyboard operation, focus, screen reader behaviour, contrast, zoom and reduced motion manually where relevant; state any unverified behaviours.
 
-## Validation
+## Testing and validation
 
-Run `npm run lint`, `npm run typecheck` and `npm run test:e2e` before proposing changes. The end-to-end suite builds and serves the static website. Install Chromium and Firefox using `npx playwright install chromium firefox` if needed.
+- Unit tests are required for new or changed logic. Cover both happy paths and unhappy paths, including relevant invalid inputs, boundary cases and failures.
+- Playwright end-to-end tests are required for frontend changes. Cover the affected user flows and UI states, with particular attention to keyboard navigation, focus, accessible names and axe-core checks as described above.
+
+Run `npm run lint`, `npm run typecheck`, `npm run test:unit` and `npm run test:e2e` before proposing changes. The end-to-end suite builds and serves the static website. Install Chromium and Firefox using `npx playwright install chromium firefox` if needed.
 
 Report failures, limitations and any checks that could not be performed. Do not claim validation that was not run.

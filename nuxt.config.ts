@@ -18,6 +18,7 @@ export default defineNuxtConfig({
   ui: {
     // Parchment fonts are bundled locally via Fontsource.
     fonts: false,
+    prose: true,
   },
   nitro: {
     preset: "github_pages",

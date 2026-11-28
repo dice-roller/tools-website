@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { downloadFile } from "~/utils/download-file";
 import {
   convert,
   detectVersion,
@@ -23,6 +24,12 @@ import type {
 import { legacyExample } from "~/data/converter-example";
 
 definePageMeta({ toolArtwork: true });
+
+// Prerendered controls must not accept input before their Vue handlers exist.
+const formReady = ref(false);
+onMounted(() => {
+  formReady.value = true;
+});
 
 const { documentationBaseUrl } = useRuntimeConfig().public;
 const converterDocumentationUrl = new URL(
@@ -354,19 +361,15 @@ async function downloadOutput() {
   const blob = new Blob([output.value], {
     type: json ? "application/json" : "text/plain;charset=utf-8",
   });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
   const stem =
     uploadedFilename.value.replace(/\.[^.]+$/, "") || "converted-roll";
   const target =
     state.targetVersion === "latest" ? latestVersion : state.targetVersion;
   const version = target === "legacy" ? "v5" : `schema-${target}`;
-  link.download = `${stem}-${version}-${state.format}.${json ? "json" : "txt"}`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadFile(
+    blob,
+    `${stem}-${version}-${state.format}.${json ? "json" : "txt"}`,
+  );
   showStatus("Download started.");
   await revealFeedback();
 }
@@ -377,460 +380,496 @@ const help: AccordionItem[] = [
 </script>
 
 <template>
-  <UContainer class="pb-12 sm:pb-16">
-    <UPageHeader
-      title="Data converter"
-      description="Convert RPG Dice Roller exports between supported data schemas and formats. Your data stays in your browser."
-      class="border-0 pt-6 pb-8 sm:pt-8"
-      :ui="{
-        title: 'font-serif text-4xl sm:text-5xl',
-        headline: 'mb-4 font-normal',
-        description: 'mt-3 max-w-3xl text-toned',
-      }"
-    >
-      <template #headline>
-        <UBreadcrumb :items="breadcrumbs" />
-      </template>
-    </UPageHeader>
+  <div class="relative isolate">
+    <div class="tool-artwork" aria-hidden="true" />
 
-    <div class="space-y-6">
-      <UForm
-        :state="state"
-        :validate="validate"
-        aria-labelledby="conversion-options-heading"
-        class="flex flex-col"
-        @submit="onSubmit"
-        @error="onValidationError"
+    <UContainer class="pb-12 sm:pb-16">
+      <UPageHeader
+        title="Data converter"
+        description="Convert RPG Dice Roller exports between supported data schemas and formats. Your data stays in your browser."
+        class="border-0 pt-6 pb-8 sm:pt-8"
+        :ui="{
+          title: 'font-serif text-4xl sm:text-5xl',
+          headline: 'mb-4 font-normal',
+          description: 'mt-3 max-w-3xl text-toned',
+        }"
       >
-        <UCard as="section" aria-labelledby="conversion-options-heading">
-          <h2 id="conversion-options-heading" class="sr-only">
-            Conversion options
-          </h2>
+        <template #headline>
+          <UBreadcrumb :items="breadcrumbs" />
+        </template>
+      </UPageHeader>
 
-          <div
-            class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]"
-          >
-            <UFormField
-              name="targetVersion"
-              label="Target version"
-              :ui="{ labelWrapper: 'justify-start' }"
-            >
-              <template #hint>
-                <FieldInfo
+      <div class="space-y-6">
+        <UForm
+          :state="state"
+          :validate="validate"
+          aria-labelledby="conversion-options-heading"
+          @submit="onSubmit"
+          @error="onValidationError"
+        >
+          <fieldset :disabled="!formReady" class="min-w-0 flex flex-col">
+            <UCard as="section" aria-labelledby="conversion-options-heading">
+              <h2 id="conversion-options-heading" class="sr-only">
+                Conversion options
+              </h2>
+
+              <div
+                class="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]"
+              >
+                <UFormField
+                  name="targetVersion"
                   label="Target version"
-                  text="Choose the destination data schema. Latest supported uses the newest schema the converter knows."
-                />
-              </template>
-
-              <USelectMenu
-                v-model="state.targetVersion"
-                :items="targetVersions"
-                :disabled="!targetVersions.length"
-                value-key="value"
-                :search-input="false"
-                size="lg"
-                class="w-full"
-              />
-            </UFormField>
-
-            <UFormField
-              name="format"
-              label="Output format"
-              :ui="{ labelWrapper: 'justify-start' }"
-            >
-              <template #hint>
-                <FieldInfo
-                  label="Output format"
-                  text="Full preserves historical statistics. Concise is for individual rolls and omits historical statistics."
-                />
-              </template>
-
-              <USelectMenu
-                v-model="state.format"
-                :items="formats"
-                value-key="value"
-                :search-input="false"
-                size="lg"
-                class="w-full"
-              />
-            </UFormField>
-
-            <UFormField
-              name="encoding"
-              label="Encoding"
-              :ui="{ labelWrapper: 'justify-start' }"
-            >
-              <template #hint>
-                <FieldInfo
-                  label="Output encoding"
-                  text="Choose readable JSON or Base64 for the converted output."
-                />
-              </template>
-
-              <USelectMenu
-                v-model="state.encoding"
-                :items="encodings"
-                value-key="value"
-                :search-input="false"
-                size="lg"
-                class="w-full"
-              />
-            </UFormField>
-
-            <div class="flex min-h-10 items-center gap-1">
-              <USwitch
-                v-model="state.strict"
-                name="strict"
-                label="Strict conversion"
-                size="xl"
-                class="items-center"
-                :ui="{ base: 'motion-reduce:transition-none' }"
-              />
-              <FieldInfo
-                label="Strict conversion"
-                text="Reject ambiguous or inconsistent data. Turn off to allow best-effort conversion with warnings."
-              />
-            </div>
-
-            <UButton
-              type="submit"
-              label="Convert data"
-              icon="i-heroicons-arrows-right-left"
-              size="xl"
-              :disabled="readingFile"
-              class="justify-center sm:col-span-2 lg:col-span-1"
-            />
-          </div>
-        </UCard>
-
-        <div ref="feedback" class="scroll-mt-24">
-          <FeedbackTransition :show="!!error" @after-enter="revealFeedback">
-            <UAlert
-              role="alert"
-              color="error"
-              variant="subtle"
-              icon="i-heroicons-exclamation-circle"
-              title="Conversion failed"
-              :description="error"
-            />
-          </FeedbackTransition>
-
-          <FeedbackTransition
-            :show="!!warnings.length"
-            @after-enter="revealFeedback"
-          >
-            <UAlert
-              color="warning"
-              variant="subtle"
-              icon="i-heroicons-exclamation-triangle"
-              title="Conversion warnings"
-            >
-              <template #description>
-                <ul class="list-disc space-y-1 ps-4">
-                  <li v-for="(warning, index) in warnings" :key="index">
-                    {{ warning.path }}: {{ warning.message }}
-                  </li>
-                </ul>
-              </template>
-            </UAlert>
-          </FeedbackTransition>
-
-          <div role="status" aria-label="Conversion status">
-            <FeedbackTransition :show="!!status" @after-enter="revealFeedback">
-              <UAlert
-                :color="statusColor"
-                variant="subtle"
-                :icon="
-                  statusColor === 'success'
-                    ? 'i-heroicons-check-circle'
-                    : 'i-heroicons-exclamation-triangle'
-                "
-                :title="status"
-              />
-            </FeedbackTransition>
-          </div>
-
-          <div class="lg:hidden">
-            <FeedbackTransition :show="!!output">
-              <UButton
-                type="button"
-                label="View converted output"
-                trailing-icon="i-heroicons-arrow-down"
-                color="neutral"
-                variant="outline"
-                @click="jumpToOutput"
-              />
-            </FeedbackTransition>
-          </div>
-        </div>
-
-        <div class="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <UCard
-            as="section"
-            aria-labelledby="converter-input-heading"
-            class="min-w-0"
-          >
-            <template #header>
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <h2
-                  id="converter-input-heading"
-                  class="font-serif text-2xl font-semibold text-highlighted"
+                  :ui="{ labelWrapper: 'justify-start' }"
                 >
-                  Input
-                </h2>
+                  <template #hint>
+                    <FieldInfo
+                      label="Target version"
+                      text="Choose the destination data schema. Latest supported uses the newest schema the converter knows."
+                    />
+                  </template>
 
-                <div class="flex flex-wrap gap-2">
-                  <UButton
-                    type="button"
-                    label="Upload file"
-                    icon="i-heroicons-arrow-up-tray"
-                    color="neutral"
-                    variant="outline"
-                    :disabled="readingFile"
-                    :loading="readingFile"
-                    @click="fileInput?.click()"
+                  <USelectMenu
+                    v-model="state.targetVersion"
+                    :items="targetVersions"
+                    :disabled="!targetVersions.length"
+                    value-key="value"
+                    :search-input="false"
+                    size="lg"
+                    class="w-full"
                   />
+                </UFormField>
 
-                  <UButton
-                    type="button"
-                    label="Load example"
-                    icon="i-lucide-flask-conical"
-                    color="neutral"
-                    variant="outline"
-                    :disabled="readingFile"
-                    @click="loadExample"
+                <UFormField
+                  name="format"
+                  label="Output format"
+                  :ui="{ labelWrapper: 'justify-start' }"
+                >
+                  <template #hint>
+                    <FieldInfo
+                      label="Output format"
+                      text="Full preserves historical statistics. Concise is for individual rolls and omits historical statistics."
+                    />
+                  </template>
+
+                  <USelectMenu
+                    v-model="state.format"
+                    :items="formats"
+                    value-key="value"
+                    :search-input="false"
+                    size="lg"
+                    class="w-full"
+                  />
+                </UFormField>
+
+                <UFormField
+                  name="encoding"
+                  label="Encoding"
+                  :ui="{ labelWrapper: 'justify-start' }"
+                >
+                  <template #hint>
+                    <FieldInfo
+                      label="Output encoding"
+                      text="Choose readable JSON or Base64 for the converted output."
+                    />
+                  </template>
+
+                  <USelectMenu
+                    v-model="state.encoding"
+                    :items="encodings"
+                    value-key="value"
+                    :search-input="false"
+                    size="lg"
+                    class="w-full"
+                  />
+                </UFormField>
+
+                <div class="flex min-h-10 items-center gap-1">
+                  <USwitch
+                    v-model="state.strict"
+                    name="strict"
+                    label="Strict conversion"
+                    size="xl"
+                    class="items-center"
+                    :ui="{ base: 'motion-reduce:transition-none' }"
+                  />
+                  <FieldInfo
+                    label="Strict conversion"
+                    text="Reject ambiguous or inconsistent data. Turn off to allow best-effort conversion with warnings."
                   />
                 </div>
+
+                <UButton
+                  type="submit"
+                  label="Convert data"
+                  icon="i-heroicons-arrows-right-left"
+                  size="xl"
+                  :disabled="readingFile"
+                  class="justify-center sm:col-span-2 lg:col-span-1"
+                />
               </div>
-            </template>
+            </UCard>
 
-            <input
-              ref="fileInput"
-              type="file"
-              accept=".json,.txt,.base64,application/json,text/plain"
-              hidden
-              @change="uploadFile"
-            />
+            <div ref="feedback" class="scroll-mt-24">
+              <FeedbackTransition :show="!!error" @after-enter="revealFeedback">
+                <UAlert
+                  role="alert"
+                  color="error"
+                  variant="subtle"
+                  icon="i-heroicons-exclamation-circle"
+                  title="Conversion failed"
+                  :description="error"
+                />
+              </FeedbackTransition>
 
-            <div class="space-y-4">
-              <UFormField
-                name="input"
-                label="Data to convert"
-                :ui="{ labelWrapper: 'justify-start' }"
+              <FeedbackTransition
+                :show="!!warnings.length"
+                @after-enter="revealFeedback"
               >
-                <template #hint>
-                  <FieldInfo
-                    label="Data to convert"
-                    text="Paste an exported individual roll or roll history in JSON or Base64."
+                <UAlert
+                  color="warning"
+                  variant="subtle"
+                  icon="i-heroicons-exclamation-triangle"
+                  title="Conversion warnings"
+                >
+                  <template #description>
+                    <ul class="list-disc space-y-1 ps-4">
+                      <li v-for="(warning, index) in warnings" :key="index">
+                        {{ warning.path }}: {{ warning.message }}
+                      </li>
+                    </ul>
+                  </template>
+                </UAlert>
+              </FeedbackTransition>
+
+              <div role="status" aria-label="Conversion status">
+                <FeedbackTransition
+                  :show="!!status"
+                  @after-enter="revealFeedback"
+                >
+                  <UAlert
+                    :color="statusColor"
+                    variant="subtle"
+                    :icon="
+                      statusColor === 'success'
+                        ? 'i-heroicons-check-circle'
+                        : 'i-heroicons-exclamation-triangle'
+                    "
+                    :title="status"
                   />
+                </FeedbackTransition>
+              </div>
+
+              <div class="lg:hidden">
+                <FeedbackTransition :show="!!output">
+                  <UButton
+                    type="button"
+                    label="View converted output"
+                    trailing-icon="i-heroicons-arrow-down"
+                    color="neutral"
+                    variant="outline"
+                    @click="jumpToOutput"
+                  />
+                </FeedbackTransition>
+              </div>
+            </div>
+
+            <div class="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <UCard
+                as="section"
+                aria-labelledby="converter-input-heading"
+                class="min-w-0"
+              >
+                <template #header>
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <h2
+                      id="converter-input-heading"
+                      class="font-serif text-2xl font-semibold text-highlighted"
+                    >
+                      Input
+                    </h2>
+
+                    <div class="flex flex-wrap gap-2">
+                      <UButton
+                        type="button"
+                        label="Upload file"
+                        icon="i-heroicons-arrow-up-tray"
+                        color="neutral"
+                        variant="outline"
+                        :disabled="readingFile"
+                        :loading="readingFile"
+                        @click="fileInput?.click()"
+                      />
+
+                      <UButton
+                        type="button"
+                        label="Load example"
+                        icon="i-lucide-flask-conical"
+                        color="neutral"
+                        variant="outline"
+                        :disabled="readingFile"
+                        @click="loadExample"
+                      />
+                    </div>
+                  </div>
                 </template>
 
-                <UTextarea
-                  v-model="state.input"
-                  :disabled="readingFile"
-                  placeholder="Paste your JSON or Base64 export here…"
-                  :rows="9"
-                  class="w-full font-mono"
-                  :ui="{ base: 'min-h-48 resize-y' }"
-                  spellcheck="false"
-                  autocapitalize="off"
-                  @update:model-value="uploadedFilename = ''"
+                <input
+                  ref="fileInput"
+                  type="file"
+                  accept=".json,.txt,.base64,application/json,text/plain"
+                  hidden
+                  @change="uploadFile"
                 />
-              </UFormField>
 
-              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <UFormField
-                  name="sourceVersion"
-                  label="Source version"
-                  :help="detectedSourceHelp"
-                  :ui="{ labelWrapper: 'justify-start' }"
-                >
-                  <template #hint>
-                    <FieldInfo
+                <div class="space-y-4">
+                  <UFormField
+                    name="input"
+                    label="Data to convert"
+                    :ui="{ labelWrapper: 'justify-start' }"
+                  >
+                    <template #hint>
+                      <FieldInfo
+                        label="Data to convert"
+                        text="Paste an exported individual roll or roll history in JSON or Base64."
+                      />
+                    </template>
+
+                    <UTextarea
+                      v-model="state.input"
+                      :disabled="readingFile"
+                      placeholder="Paste your JSON or Base64 export here…"
+                      :rows="9"
+                      class="w-full font-mono"
+                      :ui="{ base: 'min-h-48 resize-y' }"
+                      spellcheck="false"
+                      autocapitalize="off"
+                      @update:model-value="uploadedFilename = ''"
+                    />
+                  </UFormField>
+
+                  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <UFormField
+                      name="sourceVersion"
                       label="Source version"
-                      text="Choose the original data schema, or use Auto-detect to identify it from the export."
-                    />
-                  </template>
+                      :help="detectedSourceHelp"
+                      :ui="{ labelWrapper: 'justify-start' }"
+                    >
+                      <template #hint>
+                        <FieldInfo
+                          label="Source version"
+                          text="Choose the original data schema, or use Auto-detect to identify it from the export."
+                        />
+                      </template>
 
-                  <USelectMenu
-                    v-model="state.sourceVersion"
-                    :items="sourceVersions"
-                    value-key="value"
-                    :search-input="false"
-                    size="lg"
-                    class="w-full"
-                  />
-                </UFormField>
+                      <USelectMenu
+                        v-model="state.sourceVersion"
+                        :items="sourceVersions"
+                        value-key="value"
+                        :search-input="false"
+                        size="lg"
+                        class="w-full"
+                      />
+                    </UFormField>
 
-                <UFormField
-                  name="inputEncoding"
-                  label="Input encoding"
-                  :ui="{ labelWrapper: 'justify-start' }"
-                >
-                  <template #hint>
-                    <FieldInfo
+                    <UFormField
+                      name="inputEncoding"
                       label="Input encoding"
-                      text="Choose the encoding of your input, or use Auto-detect."
-                    />
-                  </template>
+                      :ui="{ labelWrapper: 'justify-start' }"
+                    >
+                      <template #hint>
+                        <FieldInfo
+                          label="Input encoding"
+                          text="Choose the encoding of your input, or use Auto-detect."
+                        />
+                      </template>
 
-                  <USelectMenu
-                    v-model="state.inputEncoding"
-                    :items="inputEncodings"
-                    value-key="value"
-                    :search-input="false"
-                    size="lg"
-                    class="w-full"
+                      <USelectMenu
+                        v-model="state.inputEncoding"
+                        :items="inputEncodings"
+                        value-key="value"
+                        :search-input="false"
+                        size="lg"
+                        class="w-full"
+                      />
+                    </UFormField>
+                  </div>
+                </div>
+              </UCard>
+
+              <UCard
+                as="section"
+                aria-labelledby="converter-output-heading"
+                class="flex min-w-0 flex-col"
+                :ui="{ body: 'flex flex-1 flex-col' }"
+              >
+                <template #header>
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <h2
+                      id="converter-output-heading"
+                      ref="outputHeading"
+                      tabindex="-1"
+                      class="scroll-mt-24 font-serif text-2xl font-semibold text-highlighted"
+                    >
+                      Output
+                    </h2>
+
+                    <div class="flex flex-wrap gap-2">
+                      <UButton
+                        type="button"
+                        label="Copy"
+                        icon="i-heroicons-clipboard"
+                        color="neutral"
+                        variant="outline"
+                        :disabled="!output"
+                        @click="copyOutput"
+                      />
+
+                      <UButton
+                        type="button"
+                        label="Download"
+                        icon="i-lucide-download"
+                        color="neutral"
+                        variant="outline"
+                        :disabled="!output"
+                        @click="downloadOutput"
+                      />
+                    </div>
+                  </div>
+                </template>
+
+                <div class="relative min-h-64 flex-1">
+                  <UTextarea
+                    v-if="output"
+                    :model-value="output"
+                    aria-label="Converted data"
+                    readonly
+                    class="absolute inset-0 font-mono"
+                    :ui="{ base: 'h-full resize-none' }"
+                    spellcheck="false"
                   />
-                </UFormField>
-              </div>
-            </div>
-          </UCard>
-
-          <UCard
-            as="section"
-            aria-labelledby="converter-output-heading"
-            class="flex min-w-0 flex-col"
-            :ui="{ body: 'flex flex-1 flex-col' }"
-          >
-            <template #header>
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <h2
-                  id="converter-output-heading"
-                  ref="outputHeading"
-                  tabindex="-1"
-                  class="scroll-mt-24 font-serif text-2xl font-semibold text-highlighted"
-                >
-                  Output
-                </h2>
-
-                <div class="flex flex-wrap gap-2">
-                  <UButton
-                    type="button"
-                    label="Copy"
-                    icon="i-heroicons-clipboard"
-                    color="neutral"
-                    variant="outline"
-                    :disabled="!output"
-                    @click="copyOutput"
-                  />
-
-                  <UButton
-                    type="button"
-                    label="Download"
-                    icon="i-lucide-download"
-                    color="neutral"
-                    variant="outline"
-                    :disabled="!output"
-                    @click="downloadOutput"
+                  <UEmpty
+                    v-else
+                    icon="i-heroicons-document"
+                    description="Your converted data will appear here."
+                    variant="subtle"
+                    size="xl"
+                    class="absolute inset-0"
                   />
                 </div>
-              </div>
-            </template>
+              </UCard>
+            </div>
+          </fieldset>
+        </UForm>
 
-            <div class="relative min-h-64 flex-1">
-              <UTextarea
-                v-if="output"
-                :model-value="output"
-                aria-label="Converted data"
-                readonly
-                class="absolute inset-0 font-mono"
-                :ui="{ base: 'h-full resize-none' }"
-                spellcheck="false"
+        <UAlert
+          color="neutral"
+          variant="subtle"
+          icon="i-heroicons-shield-check"
+          title="Conversion runs locally. No data is uploaded."
+        />
+
+        <UCard :ui="{ body: 'py-0 sm:py-0' }">
+          <UAccordion
+            :items="help"
+            :ui="{ trigger: 'py-4 text-base', body: 'space-y-3 text-toned' }"
+          >
+            <template #body>
+              <p>
+                Legacy (v5) exports and version 1 (v6) exports can be supplied
+                as JSON or Base64. The input encoding defaults to Auto-detect,
+                or you can select it explicitly.
+              </p>
+              <p>
+                Select a target schema, or choose the latest supported version.
+                Available targets depend on the selected source version. Legacy
+                output is supported for re-encoding legacy data, but reverse
+                migrations to legacy are not supported.
+              </p>
+              <p>
+                Full output preserves historical statistics and supports
+                individual rolls and histories. Concise output is only available
+                for individual rolls and does not retain historical statistics.
+                Available output formats are restricted automatically for
+                histories.
+              </p>
+              <p>
+                Strict conversion rejects ambiguous or inconsistent data.
+                Best-effort conversion can recover some inconsistencies and
+                returns warnings.
+              </p>
+            </template>
+          </UAccordion>
+        </UCard>
+
+        <UCard as="section" aria-labelledby="converter-library-heading">
+          <div class="space-y-3">
+            <h2
+              id="converter-library-heading"
+              class="font-serif text-xl font-semibold text-highlighted"
+            >
+              Use the converter in your own project
+            </h2>
+            <p class="text-toned">
+              This tool uses the open-source RPG Dice Roller Convertor library.
+              You can install the same library in your own JavaScript or
+              TypeScript project to convert exports programmatically.
+            </p>
+
+            <pre
+              class="rounded-md bg-elevated p-3 text-sm wrap-anywhere whitespace-pre-wrap text-highlighted"
+            ><code>npm install @dice-roller/convertor</code></pre>
+
+            <div class="flex flex-wrap gap-2">
+              <UButton
+                :to="converterDocumentationUrl"
+                target="_blank"
+                label="Converter documentation"
+                icon="i-lucide-book-open"
+                trailing-icon="i-heroicons-arrow-up-right"
+                color="neutral"
+                variant="outline"
               />
-              <UEmpty
-                v-else
-                icon="i-heroicons-document"
-                description="Your converted data will appear here."
-                variant="subtle"
-                size="xl"
-                class="absolute inset-0"
+              <UButton
+                to="https://github.com/dice-roller/convertor"
+                target="_blank"
+                label="View on GitHub"
+                icon="i-lucide-github"
+                trailing-icon="i-heroicons-arrow-up-right"
+                color="neutral"
+                variant="link"
               />
             </div>
-          </UCard>
-        </div>
-      </UForm>
-
-      <UAlert
-        color="neutral"
-        variant="subtle"
-        icon="i-heroicons-shield-check"
-        title="Conversion runs locally. No data is uploaded."
-      />
-
-      <UCard :ui="{ body: 'py-0 sm:py-0' }">
-        <UAccordion
-          :items="help"
-          :ui="{ trigger: 'py-4 text-base', body: 'space-y-3 text-toned' }"
-        >
-          <template #body>
-            <p>
-              Legacy (v5) exports and version 1 (v6) exports can be supplied as
-              JSON or Base64. The input encoding defaults to Auto-detect, or you
-              can select it explicitly.
-            </p>
-            <p>
-              Select a target schema, or choose the latest supported version.
-              Available targets depend on the selected source version. Legacy
-              output is supported for re-encoding legacy data, but reverse
-              migrations to legacy are not supported.
-            </p>
-            <p>
-              Full output preserves historical statistics and supports
-              individual rolls and histories. Concise output is only available
-              for individual rolls and does not retain historical statistics.
-              Available output formats are restricted automatically for
-              histories.
-            </p>
-            <p>
-              Strict conversion rejects ambiguous or inconsistent data.
-              Best-effort conversion can recover some inconsistencies and
-              returns warnings.
-            </p>
-          </template>
-        </UAccordion>
-      </UCard>
-
-      <UCard as="section" aria-labelledby="converter-library-heading">
-        <div class="space-y-3">
-          <h2
-            id="converter-library-heading"
-            class="font-serif text-xl font-semibold text-highlighted"
-          >
-            Use the converter in your own project
-          </h2>
-          <p class="text-toned">
-            This tool uses the open-source RPG Dice Roller Convertor library.
-            You can install the same library in your own JavaScript or
-            TypeScript project to convert exports programmatically.
-          </p>
-
-          <pre
-            class="rounded-md bg-elevated p-3 text-sm wrap-anywhere whitespace-pre-wrap text-highlighted"
-          ><code>npm install @dice-roller/convertor</code></pre>
-
-          <div class="flex flex-wrap gap-2">
-            <UButton
-              :to="converterDocumentationUrl"
-              target="_blank"
-              label="Converter documentation"
-              icon="i-lucide-book-open"
-              trailing-icon="i-heroicons-arrow-up-right"
-              color="neutral"
-              variant="outline"
-            />
-            <UButton
-              to="https://github.com/dice-roller/convertor"
-              target="_blank"
-              label="View on GitHub"
-              icon="i-lucide-github"
-              trailing-icon="i-heroicons-arrow-up-right"
-              color="neutral"
-              variant="link"
-            />
           </div>
-        </div>
-      </UCard>
-    </div>
-  </UContainer>
+        </UCard>
+      </div>
+    </UContainer>
+  </div>
 </template>
+
+<style scoped>
+.tool-artwork {
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 auto auto;
+  width: min(100%, 65rem);
+  height: 20rem;
+  background-image: url("~/assets/images/converter-background.png");
+  background-size: cover;
+  background-position: center right;
+  background-repeat: no-repeat;
+  opacity: 0.75;
+  pointer-events: none;
+  mask-image:
+    linear-gradient(to right, transparent, black 70%),
+    linear-gradient(to bottom, black 20%, transparent);
+  mask-composite: intersect;
+}
+
+:global(html:not(.dark) .tool-artwork) {
+  opacity: 0.23;
+}
+</style>

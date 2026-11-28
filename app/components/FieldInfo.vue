@@ -1,8 +1,12 @@
 <script setup lang="ts">
-defineProps<{
-  label: string;
-  text: string;
-}>();
+withDefaults(
+  defineProps<{
+    label: string;
+    text: string;
+    icon?: string;
+  }>(),
+  { icon: "i-heroicons-information-circle" },
+);
 
 const open = ref(false);
 </script>
@@ -21,12 +25,12 @@ const open = ref(false);
   >
     <UButton
       type="button"
-      icon="i-heroicons-information-circle"
+      :icon="icon"
       color="neutral"
       variant="ghost"
       size="xs"
       :aria-label="`About ${label}`"
-      class="p-1 text-muted"
+      class="size-7 shrink-0 justify-center p-0 text-muted"
       @click="open = true"
     />
   </UTooltip>

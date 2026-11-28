@@ -16,7 +16,11 @@ export default defineConfig({
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     {
       name: "firefox",
-      testMatch: "**/converter.spec.ts",
+      testMatch: [
+        "**/converter.spec.ts",
+        "**/playground.spec.ts",
+        "**/hydration.spec.ts",
+      ],
       use: { ...devices["Desktop Firefox"] },
     },
   ],

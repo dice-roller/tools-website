@@ -28,7 +28,9 @@ const links: ButtonProps[] = [
 </script>
 
 <template>
-  <div>
+  <div class="relative isolate">
+    <div class="home-hero-artwork" aria-hidden="true" />
+
     <UPageHero
       class="home-hero"
       title="Your dice. Your tools."
@@ -111,15 +113,26 @@ const links: ButtonProps[] = [
 </template>
 
 <style scoped>
-.home-hero {
-  /* Same artwork as the documentation, with a theme-aware contrast overlay. */
-  --hero-overlay: color-mix(in srgb, var(--ui-bg) 75%, transparent);
-
-  background-image:
-    linear-gradient(var(--hero-overlay), var(--hero-overlay)),
-    url("~/assets/images/home-background.webp");
-  background-position: center;
-  background-size: cover;
+.home-hero-artwork {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: 50%;
+  width: min(100%, 85rem);
+  translate: -50% 0;
+  height: 25rem;
+  background-image: url("~/assets/images/home-background.png");
+  background-size: auto 100%;
+  background-position-x: center;
+  background-position-y: bottom;
   background-repeat: no-repeat;
+  opacity: 0.75;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, black 20%, transparent);
+  mask-composite: intersect;
+}
+
+:global(html:not(.dark) .home-hero-artwork) {
+  opacity: 0.23;
 }
 </style>
