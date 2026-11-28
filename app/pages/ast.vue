@@ -15,7 +15,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 <template>
   <div class="relative isolate">
-    <div class="tool-artwork" aria-hidden="true" />
+    <div class="ast-artwork" aria-hidden="true" />
 
     <UContainer class="pb-12 sm:pb-16">
       <UPageHeader
@@ -66,17 +66,17 @@ const breadcrumbs: BreadcrumbItem[] = [
 </template>
 
 <style scoped>
-.tool-artwork {
+.ast-artwork {
   position: absolute;
   z-index: -1;
   inset: 0 0 auto auto;
   width: min(100%, 65rem);
   height: 20rem;
-  background-image: url("~/assets/images/converter-background.png");
+  background-image: url("~/assets/images/ast-background.png");
   background-size: cover;
   background-position: center right;
   background-repeat: no-repeat;
-  opacity: 0.75;
+  opacity: 0.60;
   pointer-events: none;
   mask-image:
     linear-gradient(to right, transparent, black 70%),
@@ -84,7 +84,7 @@ const breadcrumbs: BreadcrumbItem[] = [
   mask-composite: intersect;
 }
 
-:global(html:not(.dark) .tool-artwork) {
-  opacity: 0.23;
+:global(html:not(.dark) .ast-artwork) {
+  opacity: 0.23
 }
 </style>
