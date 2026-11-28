@@ -1,5 +1,11 @@
+import { execFileSync } from "node:child_process";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { EngineRegistry, Roller } from "@dice-roller/rpg-dice-roller";
+import {
+  EngineRegistry,
+  Roller,
+  presenters,
+} from "@dice-roller/rpg-dice-roller";
+import { SvgPresenter } from "@dice-roller/svg-presenter";
 
 // Nuxt UI's select menu restores focus as its closing animation completes.
 // Wait for the portalled listbox to unmount before editing another field.
@@ -35,7 +41,7 @@ test("playground rolls notation without switching the active tab", async ({
   await expect(
     page.getByRole("button", { name: "D6", exact: true }),
   ).toBeEnabled();
-  for (const tab of ["Visual", "Text", "Data", "Code"]) {
+  for (const tab of ["Visual", "Text", "Data"]) {
     await page.getByRole("tab", { name: tab, exact: true }).click();
     await expect(
       page.getByRole("tabpanel", { name: tab }).getByText("No rolls yet"),
@@ -98,6 +104,67 @@ test("playground reports library errors and retains the last successful roll", a
   await notation.press("Enter");
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(result).toHaveText(/^d8:/);
+});
+
+test("playground shares the site container width even with wide roll output", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/converter");
+  const converter = page.getByRole("form", { name: "Conversion options" });
+  await expect(
+    page.getByRole("button", { name: "Convert data" }),
+  ).toBeEnabled();
+  const expected = (await converter.boundingBox())!;
+
+  await page.goto("/playground");
+  const form = page.getByRole("form", { name: "Playground configuration" });
+  const notation = page.getByLabel("Notation", { exact: true });
+  const result = page.getByRole("region", { name: "Roll result", exact: true });
+  await expect(notation).toBeEnabled();
+
+  const expectAligned = async () => {
+    const bounds = (await form.boundingBox())!;
+    expect(bounds.x).toBeCloseTo(expected.x, 1);
+    expect(bounds.width).toBeCloseTo(expected.width, 1);
+    await expect
+      .poll(async () => {
+        const card = (await result.boundingBox())!;
+        return card.x + card.width;
+      })
+      .toBeCloseTo(expected.x + expected.width, 1);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(1920);
+  };
+
+  await expectAligned();
+  await selectMenuOption(
+    page,
+    page.getByLabel("Presenter", { exact: true }),
+    "SVG",
+  );
+  await notation.fill("100d6");
+  await notation.press("Enter");
+  await expect(page.locator("svg.result-preview")).toBeVisible();
+  await expectAligned();
+
+  await page.getByRole("tab", { name: "Text", exact: true }).click();
+  await expect(
+    page.getByRole("tabpanel", { name: "Text" }).getByRole("status"),
+  ).toContainText("100d6:");
+  await expectAligned();
+  await page.getByRole("tab", { name: "Data", exact: true }).click();
+  await expect(
+    page.getByRole("tabpanel", { name: "Data" }).locator("pre code"),
+  ).toContainText('"notation": "100d6"');
+  await expectAligned();
+
+  await page.getByRole("button", { name: "Collapse configuration" }).click();
+  await expect
+    .poll(async () => (await result.boundingBox())!.width)
+    .toBeCloseTo(expected.width, 1);
+  await expectAligned();
 });
 
 for (const reducedMotion of ["no-preference", "reduce"] as const) {
@@ -484,6 +551,147 @@ test("result tabs display and copy JSON and plain text", async ({ page }) => {
     .toBe(textOutput);
 });
 
+test("code tab generates executable examples from the current configuration", async ({
+  page,
+}) => {
+  await page.goto("/playground");
+  const notation = page.getByRole("textbox", { name: "Notation", exact: true });
+  const presenter = page.getByLabel("Presenter", { exact: true });
+  const options = page.getByRole("button", {
+    name: "Presenter options",
+    exact: true,
+  });
+  const back = page.getByRole("button", {
+    name: "Back to configuration",
+    exact: true,
+  });
+  const codeTab = page.getByRole("tab", { name: "Code", exact: true });
+  const panel = page.getByRole("tabpanel", { name: "Code", exact: true });
+  const code = panel.locator("pre code").last();
+  const install = panel.getByRole("button", {
+    name: "Copy install command",
+    exact: true,
+  });
+  const run = async () =>
+    execFileSync(
+      process.execPath,
+      ["--input-type=module", "-e", (await code.textContent())!],
+      { encoding: "utf8" },
+    ).trim();
+
+  await expect(notation).toBeEnabled();
+  await codeTab.click();
+  await expect(code).toHaveText(
+    'import { Roll } from "@dice-roller/rpg-dice-roller";\n\nconst result = new Roll("4d6kh3 + 2");\nconsole.log(result.present());',
+  );
+  await expect(install).toHaveCount(0);
+  await expect(code.locator("span[style]")).not.toHaveCount(0);
+  await notation.fill("2+3");
+  await expect(code).toContainText('new Roll("2+3")');
+  expect(await run()).toMatch(/= 5$/);
+
+  await selectMenuOption(
+    page,
+    page.getByLabel("Random engine", { exact: true }),
+    "Mersenne Twister",
+  );
+  await page.getByLabel("Seed", { exact: true }).fill("42");
+  await page.getByRole("button", { name: "Variables", exact: true }).click();
+  const variables = page.getByLabel("Variables (JSON data)", { exact: true });
+  await variables.fill('{"character":{"bonus":3}}');
+  await page.getByRole("button", { name: "Roll limits", exact: true }).click();
+  await page.getByLabel("Maximum dice quantity", { exact: true }).fill("100");
+  await notation.fill("2d6kh1+$character.bonus");
+  const guide = page.getByRole("link", {
+    name: "Presenter documentation (opens in a new tab)",
+  });
+  const documentationBase =
+    (
+      process.env.NUXT_PUBLIC_DOCUMENTATION_BASE_URL ??
+      "https://dice-roller.github.io/documentation/"
+    ).replace(/\/+$/, "") + "/";
+  await expect(guide).toHaveAttribute(
+    "href",
+    new URL("guide/customisation/presenters/text.html", documentationBase).href,
+  );
+  await expect(guide).toBeVisible();
+  await options.click();
+  await expect(back).toBeFocused();
+  await expect(guide).toHaveCount(1);
+  await expect(guide).toBeVisible();
+  await expect(guide).toHaveAttribute(
+    "href",
+    new URL("guide/customisation/presenters/text.html", documentationBase).href,
+  );
+  await page.getByRole("button", { name: "Flag symbols", exact: true }).click();
+  await page.getByLabel("Drop", { exact: true }).fill("DROP");
+  await expect(code).toContainText("new presenters.TextPresenter({");
+  await expect(code).toContainText('drop: "DROP"');
+  await expect(code).not.toContainText("expandInlineRolls:");
+  await expect(code).toContainText("maxQty: 100");
+  await expect(code).not.toContainText("maxIterations:");
+  await expect(code).toContainText("seed: 42");
+  await expect(code).toContainText("bonus: 3");
+
+  const expected = new Roller({
+    engine: { name: "mersenne", seed: 42 },
+    limits: { maxQty: 100 },
+    data: { character: { bonus: 3 } },
+  })
+    .roll("2d6kh1+$character.bonus")
+    .present(new presenters.TextPresenter({ flagSymbols: { drop: "DROP" } }));
+  expect(await run()).toBe(expected);
+
+  await page
+    .getByRole("button", { name: "Reset presenter options", exact: true })
+    .click();
+  await expect(code).not.toContainText("TextPresenter");
+  await back.click();
+  await expect(options).toBeFocused();
+  await selectMenuOption(page, presenter, "SVG");
+  await expect(install).toBeVisible();
+  await expect(panel.locator("pre code").first()).toHaveText(
+    "npm install @dice-roller/svg-presenter",
+  );
+  await expect(code).toContainText(
+    'import { SvgPresenter } from "@dice-roller/svg-presenter";',
+  );
+  await expect(code).toContainText("new SvgPresenter()");
+  await expect(guide).toHaveAttribute(
+    "href",
+    new URL("guide/customisation/presenters/svg.html", documentationBase).href,
+  );
+  await expect(guide).toBeVisible();
+  await options.click();
+  await expect(back).toBeFocused();
+  await expect(guide).toHaveCount(1);
+  await expect(guide).toBeVisible();
+  await expect(guide).toHaveAttribute(
+    "href",
+    new URL("guide/customisation/presenters/svg.html", documentationBase).href,
+  );
+  await page
+    .getByRole("spinbutton", { name: "Dice size", exact: true })
+    .press("ArrowUp");
+  await expect(code).toContainText(
+    "size: " + (new SvgPresenter().appearance.size + 1),
+  );
+  expect(await run()).toMatch(/^<svg /);
+
+  await back.click();
+  await expect(options).toBeFocused();
+  await variables.fill("{");
+  await expect(panel.getByRole("alert")).toContainText("Enter valid JSON");
+  await expect(panel.locator("pre code")).toHaveCount(0);
+  await variables.fill("{}");
+  await expect(code).toContainText("new SvgPresenter");
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Visual", exact: true }).click();
+  await expect(
+    page.getByRole("tabpanel", { name: "Visual" }).getByText("No rolls yet"),
+  ).toBeVisible();
+});
+
 test("visual tab presents the stored roll with the selected presenter", async ({
   page,
 }) => {
@@ -531,6 +739,285 @@ test("visual tab presents the stored roll with the selected presenter", async ({
   await expect(visual).toHaveAttribute("aria-selected", "true");
 });
 
+test("presenter options update the existing roll and are retained independently", async ({
+  page,
+}) => {
+  await page.goto("/playground");
+  const notation = page.getByLabel("Notation", { exact: true });
+  const presenter = page.getByLabel("Presenter", { exact: true });
+  const options = page.getByRole("button", {
+    name: "Presenter options",
+    exact: true,
+  });
+  const reset = page.getByRole("button", {
+    name: "Reset presenter options",
+    exact: true,
+  });
+  const visual = page.getByRole("tabpanel", { name: "Visual" });
+  const svg = visual.locator("svg.result-preview");
+  const defaults = presenters.defaultTextPresenter;
+  const appearance = new SvgPresenter().appearance;
+
+  await notation.fill("2d6kh1");
+  await notation.press("Enter");
+  await expect(visual.getByRole("status")).toContainText("2d6kh1:");
+  const original = await visual.getByRole("status").textContent();
+  const dataTab = page.getByRole("tab", { name: "Data", exact: true });
+  const code = page.getByRole("tabpanel", { name: "Data" }).locator("pre code");
+  const visualTab = page.getByRole("tab", { name: "Visual", exact: true });
+  await dataTab.click();
+  await expect(code).toContainText('"notation": "2d6kh1"');
+  const stored = JSON.parse((await code.textContent())!);
+  await visualTab.click();
+
+  const back = page.getByRole("button", {
+    name: "Back to configuration",
+    exact: true,
+  });
+  await options.click();
+  await expect(back).toBeFocused();
+  await expect(presenter).toBeHidden();
+  const inline = page.getByRole("switch", {
+    name: "Expand inline rolls",
+    exact: true,
+  });
+  await expect(inline).toHaveAttribute(
+    "aria-checked",
+    String(defaults.expandInlineRolls),
+  );
+  await expect(
+    page.getByLabel("History separator", { exact: true }),
+  ).toHaveValue(defaults.separator);
+  await expect(
+    page
+      .locator("input")
+      .and(page.getByLabel("History separator", { exact: true })),
+  ).toBeVisible();
+  const inlineInfo = page.getByRole("button", {
+    name: "About Expand inline rolls",
+    exact: true,
+  });
+  await inlineInfo.focus();
+  await expect(page.getByRole("tooltip")).toContainText(
+    "Show rolls used to calculate",
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await inline.click();
+  await page.getByRole("button", { name: "Flag symbols", exact: true }).click();
+  const drop = page.getByLabel("Drop", { exact: true });
+  await expect(drop).toHaveValue(defaults.flagSymbols.drop);
+  await drop.fill("DROP");
+  await expect(visual.getByRole("status")).toContainText("DROP");
+  await page.getByRole("tab", { name: "Text", exact: true }).click();
+  await expect(
+    page.getByRole("tabpanel", { name: "Text" }).getByRole("status"),
+  ).toContainText("DROP");
+  await visualTab.click();
+
+  await back.click();
+  await expect(options).toBeFocused();
+  await selectMenuOption(page, presenter, "SVG");
+  await options.click();
+  await expect(svg).toBeVisible();
+  const size = page.getByLabel("Dice size", { exact: true });
+  const width = page.getByLabel("Drawing width", { exact: true });
+  const stroke = page.getByLabel("Stroke colour", { exact: true });
+  const fill = page.getByLabel("Fill colour", { exact: true });
+  const noWrap = page.getByRole("switch", {
+    name: "Keep on one line",
+    exact: true,
+  });
+  const totals = page.getByRole("switch", { name: "Totals", exact: true });
+  await expect(size).toHaveValue(String(appearance.size));
+  await expect(width).toHaveAttribute(
+    "aria-valuenow",
+    String(appearance.width),
+  );
+  await expect(stroke).toHaveValue(appearance.stroke);
+  await expect(fill).toHaveValue(appearance.fill);
+  await expect(fill).toBeDisabled();
+  await page.getByRole("switch", { name: "Fill dice", exact: true }).click();
+  await expect(fill).toBeEnabled();
+  const picker = page.getByRole("button", {
+    name: "Pick stroke colour",
+    exact: true,
+  });
+  await stroke.fill("#236b57");
+  await expect(svg).toHaveAttribute("style", /color:#236b57/);
+  await picker.click();
+  const popover = page.getByRole("dialog", { name: "Pick stroke colour" });
+  await expect(popover).toBeVisible();
+  await popover
+    .locator('[data-slot="selector"]')
+    .click({ position: { x: 20, y: 20 } });
+  await expect(stroke).not.toHaveValue("#236b57");
+  const chosenColour = await stroke.inputValue();
+  await popover.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(popover).toBeHidden();
+  await expect(picker).toBeFocused();
+  await stroke.fill("invalid");
+  await expect(svg).toHaveAttribute(
+    "style",
+    new RegExp("color:" + chosenColour, "i"),
+  );
+  await stroke.press("Tab");
+  await expect(stroke).toHaveValue(chosenColour);
+  await expect(svg.locator(".total")).toBeVisible();
+  await totals.click();
+  await expect(svg.locator(".total")).toHaveCount(0);
+  await size.press("ArrowUp");
+  await expect(
+    svg.locator('g[data-die-type="standard"] > svg').first(),
+  ).toHaveAttribute("width", String(appearance.size + 1));
+  await noWrap.click();
+  await expect(width).toBeDisabled();
+  await expect(svg.locator('g[data-die-type="standard"]')).toHaveCount(2);
+
+  await back.click();
+  await expect(options).toBeFocused();
+  await selectMenuOption(page, presenter, "Text");
+  await options.click();
+  await expect(inline).toHaveAttribute("aria-checked", "true");
+  await expect(visual.getByRole("status")).toContainText("DROP");
+  await reset.click();
+  await expect(visual.getByRole("status")).toHaveText(original!);
+  await expect(inline).toHaveAttribute(
+    "aria-checked",
+    String(defaults.expandInlineRolls),
+  );
+  await back.click();
+  await expect(options).toBeFocused();
+  await selectMenuOption(page, presenter, "SVG");
+  await options.click();
+  await expect(size).toHaveValue(String(appearance.size + 1));
+  await expect(noWrap).toHaveAttribute("aria-checked", "true");
+  await expect(totals).toHaveAttribute("aria-checked", "false");
+  await reset.click();
+  await expect(size).toHaveValue(String(appearance.size));
+  await expect(width).toBeEnabled();
+  await expect(svg.locator(".total")).toBeVisible();
+  await dataTab.click();
+  await expect
+    .poll(async () => JSON.parse((await code.textContent())!))
+    .toEqual(stored);
+});
+
+test("configuration reset restores all defaults without replacing the roll", async ({
+  page,
+}) => {
+  await page.goto("/playground");
+  const notation = page.getByLabel("Notation", { exact: true });
+  const presenter = page.getByLabel("Presenter", { exact: true });
+  const engine = page.getByLabel("Random engine", { exact: true });
+  const options = page.getByRole("button", {
+    name: "Presenter options",
+    exact: true,
+  });
+  const back = page.getByRole("button", {
+    name: "Back to configuration",
+    exact: true,
+  });
+  const reset = page.getByRole("button", {
+    name: "Reset configuration",
+    exact: true,
+  });
+  const data = page.getByRole("tabpanel", { name: "Data" }).locator("pre code");
+  const limits = new Roller().limits;
+
+  await expect(reset).toBeEnabled();
+  await selectMenuOption(page, engine, "Mersenne Twister");
+  await page.getByLabel("Seed", { exact: true }).fill("42");
+  await page.getByRole("button", { name: "Variables", exact: true }).click();
+  const variables = page.getByLabel("Variables (JSON data)", { exact: true });
+  await variables.fill('{"bonus":3}');
+  await page.getByRole("button", { name: "Roll limits", exact: true }).click();
+  const quantity = page.getByLabel("Maximum dice quantity", { exact: true });
+  const iterations = page.getByLabel("Maximum iterations", { exact: true });
+  const generated = page.getByLabel("Maximum generated rolls", { exact: true });
+  await quantity.fill("20");
+  await iterations.fill("30");
+  await generated.fill("40");
+  await options.click();
+  await expect(back).toBeFocused();
+  const separator = page.getByLabel("History separator", { exact: true });
+  await separator.fill("|");
+  await back.click();
+  await expect(options).toBeFocused();
+  await selectMenuOption(page, presenter, "SVG");
+  await options.click();
+  await expect(back).toBeFocused();
+  const size = page.getByLabel("Dice size", { exact: true });
+  await size.press("ArrowUp");
+  await back.click();
+  await expect(options).toBeFocused();
+  await notation.fill("2d6+$bonus");
+  await notation.press("Enter");
+  await page.getByRole("tab", { name: "Data", exact: true }).click();
+  await expect(data).toContainText('"notation": "2d6+$bonus"');
+  const stored = JSON.parse((await data.textContent())!);
+
+  await variables.fill("{");
+  await notation.press("Enter");
+  await expect(variables).toHaveAttribute("aria-invalid", "true");
+  await reset.click();
+  await expect(reset).toBeFocused();
+  await expect(notation).toHaveValue("2d6+$bonus");
+  await expect(presenter).toContainText("Text");
+  await expect(engine).toContainText("Native Math (default)");
+  await expect(page.getByLabel("Seed", { exact: true })).toBeHidden();
+  await expect(variables).toHaveValue("{}");
+  await expect(quantity).toHaveValue(String(limits.maxQty));
+  await expect(iterations).toHaveValue(String(limits.maxIterations));
+  await expect(generated).toHaveValue(String(limits.maxGeneratedRolls));
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect
+    .poll(async () => JSON.parse((await data.textContent())!))
+    .toEqual(stored);
+  await options.click();
+  await expect(back).toBeFocused();
+  await expect(separator).toHaveValue(
+    presenters.defaultTextPresenter.separator,
+  );
+  await back.click();
+  await expect(options).toBeFocused();
+  await selectMenuOption(page, presenter, "SVG");
+  await options.click();
+  await expect(back).toBeFocused();
+  await expect(size).toHaveValue(String(new SvgPresenter().appearance.size));
+  // The global reset also works when the presenter options view is open.
+  await reset.click();
+  await expect(presenter).toContainText("Text");
+  await expect(data).toContainText('"notation": "2d6+$bonus"');
+  await expect
+    .poll(async () => JSON.parse((await data.textContent())!))
+    .toEqual(stored);
+});
+
+test("mobile configuration can be reset without closing the dialog", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/playground");
+  await page
+    .getByRole("button", { name: "Configuration", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Configuration",
+    exact: true,
+  });
+  const presenter = dialog.getByLabel("Presenter", { exact: true });
+  await selectMenuOption(page, presenter, "SVG");
+  await dialog
+    .getByRole("button", { name: "Reset configuration", exact: true })
+    .click();
+  await expect(dialog).toBeVisible();
+  await expect(presenter).toContainText("Text");
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("No rolls yet")).toBeVisible();
+});
+
 test("configuration fields have accessible information tooltips", async ({
   page,
 }) => {
@@ -561,6 +1048,22 @@ test("configuration fields have accessible information tooltips", async ({
     await expect(page.getByRole("tooltip")).toBeHidden();
     await expect(info).toBeFocused();
   }
+  const live = page.getByRole("button", {
+    name: "About immediate presenter changes",
+    exact: true,
+  });
+  await live.focus();
+  await expect(page.getByRole("tooltip")).toContainText(
+    "Changes are applied immediately to existing roll results, without rerolling.",
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await expect(live).toBeFocused();
+  const bounds = (await live.boundingBox())!;
+  const presenter = (await page
+    .getByLabel("Presenter", { exact: true })
+    .boundingBox())!;
+  expect(bounds.x + bounds.width).toBeCloseTo(presenter.x + presenter.width, 1);
   await expect(page.getByText("No rolls yet")).toBeVisible();
 });
 
@@ -570,7 +1073,7 @@ test("configuration accordions retain bottom padding when expanded", async ({
   await page.goto("/playground");
   const panel = page.getByRole("region", { name: "Configuration" });
 
-  for (const label of ["Presenter options", "Variables", "Roll limits"]) {
+  for (const label of ["Variables", "Roll limits"]) {
     const trigger = panel.getByRole("button", { name: label, exact: true });
     await trigger.click();
     const body = panel.locator(

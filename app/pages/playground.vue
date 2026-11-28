@@ -3,12 +3,15 @@ import type { AccordionItem, DropdownMenuItem, TabsItem } from "@nuxt/ui";
 import { convert } from "@dice-roller/convertor";
 import {
   Roller,
+  presenters,
   RollSettings,
   type Roll,
   type RollInputData,
   type RollLimits,
 } from "@dice-roller/rpg-dice-roller";
 import { SvgPresenter } from "@dice-roller/svg-presenter";
+import { presenterDefinitions } from "~/data/presenter-options";
+import { buildPlaygroundCode } from "~/utils/playground-code";
 import {
   breakpointsTailwind,
   createReusableTemplate,
@@ -33,6 +36,7 @@ useSeoMeta({
 });
 
 let roller = new Roller();
+const defaultLimits = roller.limits;
 const engineRegistry = roller.settings.engines;
 const defaultEngine = "nativeMath";
 const engineLabels: Record<string, string> = {
@@ -48,7 +52,17 @@ const engineItems = engineRegistry.names.map((name) => ({
 let activeEngine = defaultEngine;
 let activeSeed: number | undefined;
 let resetEngine = false;
-const svgPresenter = new SvgPresenter();
+const svgDefaults = new SvgPresenter().appearance;
+const textDefaults = presenters.defaultTextPresenter;
+
+function defaultTextOptions() {
+  return {
+    flagSymbols: { ...textDefaults.flagSymbols },
+    separator: textDefaults.separator,
+    expandInlineRolls: textDefaults.expandInlineRolls,
+  };
+}
+
 const latestRoll = shallowRef<Roll>();
 const notationError = ref("");
 const variablesError = ref("");
@@ -74,11 +88,32 @@ const notationFieldError = computed(
           : undefined),
 );
 const configurationOpen = ref(true);
+const configurationView = ref<"main" | "presenter">("main");
+let focusConfigurationView = false;
+
+function navigateConfiguration(view: typeof configurationView.value) {
+  focusConfigurationView = true;
+  configurationView.value = view;
+}
+
+function onConfigurationViewEntered(element: Element) {
+  if (!focusConfigurationView) return;
+  focusConfigurationView = false;
+  element
+    .querySelector<HTMLElement>("[data-configuration-navigation]")
+    ?.focus();
+}
+
+function onConfigurationViewLeaving(element: Element) {
+  element.setAttribute("inert", "");
+}
 const desktop = useBreakpoints(breakpointsTailwind).greaterOrEqual("md");
 const [DefineConfiguration, ReuseConfiguration] = createReusableTemplate();
 const configurationTrigger = useTemplateRef("configurationTrigger");
 
 function revealConfiguration() {
+  focusConfigurationView = false;
+  configurationView.value = "main";
   configurationOpen.value = true;
 }
 
@@ -88,8 +123,15 @@ function restoreConfigurationFocus(event: Event) {
   configurationTrigger.value?.$el?.focus();
 }
 
+watch(configurationOpen, (open) => {
+  if (!open && !desktop.value) {
+    focusConfigurationView = false;
+    configurationView.value = "main";
+  }
+});
+
 const advancedOpen = ref<string[]>([]);
-const textResult = computed(() => latestRoll.value?.present() ?? "");
+
 const dataFormat = ref<"full" | "concise">("full");
 const dataFormats = [
   { label: "Full", value: "full" },
@@ -122,16 +164,64 @@ const dataResult = computed(() => {
   }
 });
 
+function defaultConfiguration() {
+  return {
+    presenter: "Text" as keyof typeof presenterDefinitions,
+    textOptions: defaultTextOptions(),
+    svgOptions: { ...svgDefaults },
+    engine: defaultEngine,
+    seed: "",
+    variables: "{}",
+    maxQty: String(defaultLimits.maxQty),
+    maxIterations: String(defaultLimits.maxIterations),
+    maxGeneratedRolls: String(defaultLimits.maxGeneratedRolls),
+  };
+}
+
 const state = reactive({
   notation: "4d6kh3 + 2",
-  presenter: "Text",
-  engine: defaultEngine,
-  seed: "",
-  variables: "{}",
-  maxQty: String(roller.limits.maxQty),
-  maxIterations: String(roller.limits.maxIterations),
-  maxGeneratedRolls: String(roller.limits.maxGeneratedRolls),
+  ...defaultConfiguration(),
 });
+
+function resetConfiguration() {
+  Object.assign(state, defaultConfiguration());
+  // Apply the reset engine and limits on the next roll, preserving history.
+  resetEngine = true;
+  notationError.value = "";
+  variablesError.value = "";
+  seedError.value = "";
+  for (const key of limitKeys) limitErrors[key] = "";
+  revealConfiguration();
+}
+
+const textPresenter = computed(
+  () => new presenters.TextPresenter(state.textOptions),
+);
+const svgPresenter = computed(() => new SvgPresenter(state.svgOptions));
+const textResult = computed(
+  () => latestRoll.value?.present(textPresenter.value) ?? "",
+);
+
+const selectedPresenter = computed(() => presenterDefinitions[state.presenter]);
+const presenterGuideUrl = computed(
+  () =>
+    new URL(
+      selectedPresenter.value.documentationPath,
+      `${documentationBaseUrl.replace(/\/+$/, "")}/`,
+    ).href,
+);
+
+function updatePresenterOptions(values: Record<string, unknown>) {
+  Object.assign(state[selectedPresenter.value.stateKey], values);
+}
+
+function resetPresenterOptions() {
+  if (state.presenter === "SVG") {
+    state.svgOptions = { ...svgDefaults };
+  } else {
+    state.textOptions = defaultTextOptions();
+  }
+}
 
 // The registry has no seed capability metadata. Built-in factories reject
 // an explicit seed when unsupported; a successful probe never draws dice.
@@ -185,8 +275,8 @@ const visualResult = computed(() => {
     return {
       output:
         state.presenter === "SVG"
-          ? latestRoll.value.present(svgPresenter)
-          : latestRoll.value.present(),
+          ? latestRoll.value.present(svgPresenter.value)
+          : textResult.value,
       error: "",
     };
   } catch (cause) {
@@ -225,6 +315,73 @@ for (const key of limitKeys) {
     { flush: "sync" },
   );
 }
+
+function readVariableData(): RollInputData {
+  const parsed: unknown = state.variables.trim()
+    ? JSON.parse(state.variables)
+    : {};
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("Variables must be a JSON object.");
+  }
+
+  // Use the library's own validation for nested variable values.
+  return RollSettings.withData(roller.settings, parsed as RollInputData).data;
+}
+
+const codeResult = computed(() => {
+  try {
+    const seed =
+      seedSupported.value && state.seed.trim() ? Number(state.seed) : undefined;
+    if (
+      seed !== undefined &&
+      (!Number.isInteger(seed) || seed < -2147483648 || seed > 2147483647)
+    ) {
+      throw new Error("Enter a valid signed 32-bit integer in the Seed field.");
+    }
+    const limits = {
+      maxQty: Number(state.maxQty),
+      maxIterations: Number(state.maxIterations),
+      maxGeneratedRolls: Number(state.maxGeneratedRolls),
+    };
+    if (
+      limitKeys.some(
+        (key) => !Number.isSafeInteger(limits[key]) || limits[key] < 1,
+      )
+    ) {
+      throw new Error(
+        "Enter positive whole numbers in the Roll limits section.",
+      );
+    }
+    return {
+      ...buildPlaygroundCode({
+        notation: state.notation,
+        engine: state.engine,
+        defaultEngine,
+        seed,
+        limits,
+        defaultLimits,
+        data: readVariableData(),
+        presenter: state.presenter,
+        presenterOptions: state[selectedPresenter.value.stateKey],
+        presenterDefaults:
+          state.presenter === "SVG" ? { ...svgDefaults } : defaultTextOptions(),
+      }),
+      error: "",
+    };
+  } catch (cause) {
+    return {
+      code: "",
+      install: "",
+      error:
+        cause instanceof SyntaxError
+          ? "Enter valid JSON in the Variables section."
+          : cause instanceof Error
+            ? cause.message
+            : "An unexpected error occurred.",
+    };
+  }
+});
 
 function onSubmit() {
   notationError.value = "";
@@ -267,20 +424,7 @@ function onSubmit() {
   let data: RollInputData;
 
   try {
-    const parsed: unknown = state.variables.trim()
-      ? JSON.parse(state.variables)
-      : {};
-
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      Array.isArray(parsed)
-    ) {
-      throw new Error("Variables must be a JSON object.");
-    }
-
-    // Use the library's own validation for nested variable values.
-    data = RollSettings.withData(roller.settings, parsed as RollInputData).data;
+    data = readVariableData();
   } catch (cause) {
     variablesError.value =
       cause instanceof SyntaxError
@@ -433,9 +577,6 @@ const tabs: TabsItem[] = [
   { label: "Code", icon: "i-lucide-code", value: "code" },
 ];
 
-const presenterOptions: AccordionItem[] = [
-  { label: "Presenter options", slot: "presenter" },
-];
 const advancedOptions: AccordionItem[] = [
   {
     label: "Variables",
@@ -464,7 +605,7 @@ const statistics = [
 <template>
   <div class="relative isolate">
     <div class="playground-artwork" aria-hidden="true" />
-    <UContainer class="max-w-[100rem] pb-12">
+    <UContainer class="pb-12">
       <UPageHeader
         title="Dice playground"
         description="Experiment with dice notation, configure the dice roller and explore the results."
@@ -610,83 +751,180 @@ const statistics = [
           <DefineConfiguration>
             <div
               id="playground-configuration-content"
-              class="space-y-5 border-t border-default p-4"
+              class="relative min-w-0 overflow-x-clip"
             >
-              <UFormField
-                name="presenter"
-                label="Presenter"
-                :ui="{ labelWrapper: 'justify-start gap-1' }"
+              <Transition
+                :name="
+                  configurationView === 'presenter'
+                    ? 'configuration-back'
+                    : 'configuration-forward'
+                "
+                mode="out-in"
+                @before-leave="onConfigurationViewLeaving"
+                @after-enter="onConfigurationViewEntered"
               >
-                <template #hint>
-                  <FieldInfo
+                <div
+                  v-if="configurationView === 'main'"
+                  key="main"
+                  class="space-y-5 border-t border-default p-4"
+                >
+                  <UFormField
+                    name="presenter"
                     label="Presenter"
-                    text="Choose how the roll is displayed in the Visual tab. Changing the presenter does not roll the dice again."
-                  />
-                </template>
-                <USelectMenu
-                  v-model="state.presenter"
-                  :items="['Text', 'SVG']"
-                  :search-input="false"
-                  icon="i-lucide-palette"
-                  size="lg"
-                  class="w-full"
-                />
-              </UFormField>
-
-              <UAccordion
-                :items="presenterOptions"
-                class="rounded-md border border-default px-3"
-                :ui="{ body: 'pb-3' }"
-              >
-                <template #presenter-body>
-                  <p class="text-sm text-toned">
-                    Dice size, modifier flags and label options will appear
-                    here.
-                  </p>
-                </template>
-              </UAccordion>
-
-              <div>
-                <UFormField
-                  name="engine"
-                  label="Random engine"
-                  :ui="{ labelWrapper: 'justify-start gap-1' }"
-                >
-                  <template #hint>
-                    <FieldInfo
-                      label="Random engine"
-                      text="Choose how random numbers are generated for dice and additional rolls triggered by modifiers."
+                    :ui="{
+                      labelWrapper: 'justify-start gap-1',
+                      hint: 'flex flex-1 items-center justify-between gap-1',
+                    }"
+                  >
+                    <template #hint>
+                      <FieldInfo
+                        label="Presenter"
+                        text="Choose how the roll is displayed in the Visual tab. Changing the presenter does not roll the dice again."
+                      />
+                      <FieldInfo
+                        label="immediate presenter changes"
+                        icon="i-lucide-zap"
+                        text="Changes are applied immediately to existing roll results, without rerolling."
+                      />
+                    </template>
+                    <USelectMenu
+                      v-model="state.presenter"
+                      :items="
+                        Object.keys(
+                          presenterDefinitions,
+                        ) as (keyof typeof presenterDefinitions)[]
+                      "
+                      :search-input="false"
+                      icon="i-lucide-palette"
+                      size="lg"
+                      class="w-full"
                     />
-                  </template>
-                  <USelectMenu
-                    v-model="state.engine"
-                    :items="engineItems"
-                    value-key="value"
-                    :search-input="false"
-                    icon="i-lucide-shuffle"
-                    size="lg"
-                    class="w-full"
-                  />
-                </UFormField>
+                  </UFormField>
 
-                <UCollapsible
-                  id="playground-seed-controls"
-                  :open="seedSupported"
-                  :inert="!seedSupported"
-                  :ui="{ content: 'motion-reduce:animate-none!' }"
-                >
-                  <template #content>
-                    <div class="pt-5">
+                  <UButton
+                    label="Presenter options"
+                    trailing-icon="i-lucide-chevron-right"
+                    type="button"
+                    color="neutral"
+                    variant="outline"
+                    class="w-full justify-between"
+                    data-configuration-navigation
+                    @click="navigateConfiguration('presenter')"
+                  />
+
+                  <UButton
+                    :to="presenterGuideUrl"
+                    target="_blank"
+                    label="Presenter documentation"
+                    icon="i-lucide-book-open"
+                    trailing-icon="i-lucide-external-link"
+                    variant="link"
+                    size="sm"
+                    class="min-h-6 px-0 hover:underline"
+                    aria-label="Presenter documentation (opens in a new tab)"
+                  />
+
+                  <div>
+                    <UFormField
+                      name="engine"
+                      label="Random engine"
+                      :ui="{ labelWrapper: 'justify-start gap-1' }"
+                    >
+                      <template #hint>
+                        <FieldInfo
+                          label="Random engine"
+                          text="Choose how random numbers are generated for dice and additional rolls triggered by modifiers."
+                        />
+                      </template>
+                      <USelectMenu
+                        v-model="state.engine"
+                        :items="engineItems"
+                        value-key="value"
+                        :search-input="false"
+                        icon="i-lucide-shuffle"
+                        size="lg"
+                        class="w-full"
+                      />
+                    </UFormField>
+
+                    <UCollapsible
+                      id="playground-seed-controls"
+                      :open="seedSupported"
+                      :inert="!seedSupported"
+                      :ui="{ content: 'motion-reduce:animate-none!' }"
+                    >
+                      <template #content>
+                        <div class="pt-5">
+                          <UFormField
+                            name="seed"
+                            label="Seed"
+                            :error="seedError || undefined"
+                            :ui="{ labelWrapper: 'justify-start gap-1' }"
+                          >
+                            <template #hint>
+                              <FieldInfo
+                                label="Seed"
+                                text="Set a signed 32-bit integer for a repeatable sequence with a seedable engine. An empty seed is generated automatically when selecting a seedable engine or rolling. Reset restarts the sequence on the next roll."
+                              />
+                            </template>
+                            <template #error="{ error }">
+                              <span
+                                v-if="error"
+                                role="alert"
+                                class="wrap-anywhere"
+                                >{{ error }}</span
+                              >
+                            </template>
+                            <div class="flex gap-2">
+                              <UInput
+                                v-model="state.seed"
+                                size="lg"
+                                class="min-w-0 flex-1"
+                                :disabled="!seedSupported"
+                              />
+                              <UButton
+                                icon="i-lucide-wand-sparkles"
+                                aria-label="Generate seed"
+                                type="button"
+                                color="neutral"
+                                variant="outline"
+                                :disabled="!seedSupported"
+                                @click="generateSeed"
+                              />
+                              <UButton
+                                icon="i-lucide-rotate-ccw"
+                                aria-label="Reset random sequence"
+                                type="button"
+                                color="neutral"
+                                variant="outline"
+                                :disabled="!seedSupported"
+                                @click="resetRandomSequence"
+                              />
+                            </div>
+                          </UFormField>
+                        </div>
+                      </template>
+                    </UCollapsible>
+                  </div>
+
+                  <UAccordion
+                    v-model="advancedOpen"
+                    type="multiple"
+                    :items="advancedOptions"
+                    class="rounded-md border border-default px-3"
+                    :ui="{ body: 'pb-3' }"
+                  >
+                    <template #variables-body>
                       <UFormField
-                        name="seed"
-                        label="Seed"
-                        :error="seedError || undefined"
+                        name="variables"
+                        label="Variables (JSON data)"
+                        :error="variablesError || undefined"
                         :ui="{ labelWrapper: 'justify-start gap-1' }"
                       >
                         <template #hint>
                           <FieldInfo
-                            label="Seed"
-                            text="Set a signed 32-bit integer for a repeatable sequence with a seedable engine. An empty seed is generated automatically when selecting a seedable engine or rolling. Reset restarts the sequence on the next roll."
+                            label="Variables (JSON data)"
+                            text="Supply a JSON object of numbers or booleans to use in notation, such as $bonus or $character.attackBonus."
                           />
                         </template>
                         <template #error="{ error }">
@@ -697,144 +935,146 @@ const statistics = [
                             >{{ error }}</span
                           >
                         </template>
-                        <div class="flex gap-2">
-                          <UInput
-                            v-model="state.seed"
-                            size="lg"
-                            class="min-w-0 flex-1"
-                            :disabled="!seedSupported"
-                          />
-                          <UButton
-                            icon="i-lucide-wand-sparkles"
-                            aria-label="Generate seed"
-                            type="button"
-                            color="neutral"
-                            variant="outline"
-                            :disabled="!seedSupported"
-                            @click="generateSeed"
-                          />
-                          <UButton
-                            icon="i-lucide-rotate-ccw"
-                            aria-label="Reset random sequence"
-                            type="button"
-                            color="neutral"
-                            variant="outline"
-                            :disabled="!seedSupported"
-                            @click="resetRandomSequence"
-                          />
-                        </div>
+                        <UTextarea
+                          v-model="state.variables"
+                          class="w-full font-mono"
+                          :rows="4"
+                        />
                       </UFormField>
-                    </div>
-                  </template>
-                </UCollapsible>
-              </div>
-
-              <UAccordion
-                v-model="advancedOpen"
-                type="multiple"
-                :items="advancedOptions"
-                class="rounded-md border border-default px-3"
-                :ui="{ body: 'pb-3' }"
-              >
-                <template #variables-body>
-                  <UFormField
-                    name="variables"
-                    label="Variables (JSON data)"
-                    :error="variablesError || undefined"
-                    :ui="{ labelWrapper: 'justify-start gap-1' }"
-                  >
-                    <template #hint>
-                      <FieldInfo
-                        label="Variables (JSON data)"
-                        text="Supply a JSON object of numbers or booleans to use in notation, such as $bonus or $character.attackBonus."
-                      />
                     </template>
-                    <template #error="{ error }">
-                      <span v-if="error" role="alert" class="wrap-anywhere">{{
-                        error
-                      }}</span>
-                    </template>
-                    <UTextarea
-                      v-model="state.variables"
-                      class="w-full font-mono"
-                      :rows="4"
-                    />
-                  </UFormField>
-                </template>
-                <template #limits-body>
-                  <div class="space-y-3">
-                    <UFormField
-                      name="maxQty"
-                      label="Maximum dice quantity"
-                      :error="limitErrors.maxQty || undefined"
-                      :ui="{ labelWrapper: 'justify-start gap-1' }"
-                    >
-                      <template #hint>
-                        <FieldInfo
+                    <template #limits-body>
+                      <div class="space-y-3">
+                        <UFormField
+                          name="maxQty"
                           label="Maximum dice quantity"
-                          text="Limit the number of dice initially rolled in each pool, before modifiers are applied."
-                        />
-                      </template>
-                      <template #error="{ error }">
-                        <span v-if="error" role="alert" class="wrap-anywhere">{{
-                          error
-                        }}</span>
-                      </template>
-                      <UInput
-                        v-model="state.maxQty"
-                        class="w-full"
-                        inputmode="numeric"
-                      />
-                    </UFormField>
-                    <UFormField
-                      name="maxIterations"
-                      label="Maximum iterations"
-                      :error="limitErrors.maxIterations || undefined"
-                      :ui="{ labelWrapper: 'justify-start gap-1' }"
-                    >
-                      <template #hint>
-                        <FieldInfo
+                          :error="limitErrors.maxQty || undefined"
+                          :ui="{ labelWrapper: 'justify-start gap-1' }"
+                        >
+                          <template #hint>
+                            <FieldInfo
+                              label="Maximum dice quantity"
+                              text="Limit the number of dice initially rolled in each pool, before modifiers are applied."
+                            />
+                          </template>
+                          <template #error="{ error }">
+                            <span
+                              v-if="error"
+                              role="alert"
+                              class="wrap-anywhere"
+                              >{{ error }}</span
+                            >
+                          </template>
+                          <UInput
+                            v-model="state.maxQty"
+                            class="w-full"
+                            inputmode="numeric"
+                          />
+                        </UFormField>
+                        <UFormField
+                          name="maxIterations"
                           label="Maximum iterations"
-                          text="Limit explosion and re-roll generations, or uniqueness retries, per die."
-                        />
-                      </template>
-                      <template #error="{ error }">
-                        <span v-if="error" role="alert" class="wrap-anywhere">{{
-                          error
-                        }}</span>
-                      </template>
-                      <UInput
-                        v-model="state.maxIterations"
-                        class="w-full"
-                        inputmode="numeric"
-                      />
-                    </UFormField>
-                    <UFormField
-                      name="maxGeneratedRolls"
-                      label="Maximum generated rolls"
-                      :error="limitErrors.maxGeneratedRolls || undefined"
-                      :ui="{ labelWrapper: 'justify-start gap-1' }"
-                    >
-                      <template #hint>
-                        <FieldInfo
+                          :error="limitErrors.maxIterations || undefined"
+                          :ui="{ labelWrapper: 'justify-start gap-1' }"
+                        >
+                          <template #hint>
+                            <FieldInfo
+                              label="Maximum iterations"
+                              text="Limit explosion and re-roll generations, or uniqueness retries, per die."
+                            />
+                          </template>
+                          <template #error="{ error }">
+                            <span
+                              v-if="error"
+                              role="alert"
+                              class="wrap-anywhere"
+                              >{{ error }}</span
+                            >
+                          </template>
+                          <UInput
+                            v-model="state.maxIterations"
+                            class="w-full"
+                            inputmode="numeric"
+                          />
+                        </UFormField>
+                        <UFormField
+                          name="maxGeneratedRolls"
                           label="Maximum generated rolls"
-                          text="Limit additional rolls across modifiers in each pool, including discarded rolls. Initial dice do not count towards this limit."
-                        />
-                      </template>
-                      <template #error="{ error }">
-                        <span v-if="error" role="alert" class="wrap-anywhere">{{
-                          error
-                        }}</span>
-                      </template>
-                      <UInput
-                        v-model="state.maxGeneratedRolls"
-                        class="w-full"
-                        inputmode="numeric"
-                      />
-                    </UFormField>
-                  </div>
-                </template>
-              </UAccordion>
+                          :error="limitErrors.maxGeneratedRolls || undefined"
+                          :ui="{ labelWrapper: 'justify-start gap-1' }"
+                        >
+                          <template #hint>
+                            <FieldInfo
+                              label="Maximum generated rolls"
+                              text="Limit additional rolls across modifiers in each pool, including discarded rolls. Initial dice do not count towards this limit."
+                            />
+                          </template>
+                          <template #error="{ error }">
+                            <span
+                              v-if="error"
+                              role="alert"
+                              class="wrap-anywhere"
+                              >{{ error }}</span
+                            >
+                          </template>
+                          <UInput
+                            v-model="state.maxGeneratedRolls"
+                            class="w-full"
+                            inputmode="numeric"
+                          />
+                        </UFormField>
+                      </div>
+                    </template>
+                  </UAccordion>
+                </div>
+                <div
+                  v-else
+                  key="presenter"
+                  class="space-y-5 border-t border-default p-4"
+                >
+                  <UButton
+                    label="Back to configuration"
+                    icon="i-lucide-chevron-left"
+                    type="button"
+                    color="neutral"
+                    variant="ghost"
+                    data-configuration-navigation
+                    class="-ms-2"
+                    @click="navigateConfiguration('main')"
+                  />
+                  <h3 class="font-serif text-lg font-semibold text-highlighted">
+                    {{ state.presenter }} presenter options
+                  </h3>
+
+                  <UButton
+                    :to="presenterGuideUrl"
+                    target="_blank"
+                    label="Presenter documentation"
+                    icon="i-lucide-book-open"
+                    trailing-icon="i-lucide-external-link"
+                    variant="link"
+                    size="sm"
+                    class="min-h-6 px-0 hover:underline"
+                    aria-label="Presenter documentation (opens in a new tab)"
+                  />
+
+                  <PresenterOptionFields
+                    :key="state.presenter"
+                    :fields="selectedPresenter.fields"
+                    :values="state[selectedPresenter.stateKey]"
+                    :prefix="selectedPresenter.stateKey"
+                    @update="updatePresenterOptions"
+                  />
+                  <UButton
+                    label="Reset presenter options"
+                    icon="i-lucide-rotate-ccw"
+                    type="button"
+                    color="neutral"
+                    variant="outline"
+                    class="w-full justify-center"
+                    @click="resetPresenterOptions"
+                  />
+                </div>
+              </Transition>
             </div>
           </DefineConfiguration>
 
@@ -882,7 +1122,8 @@ const statistics = [
                     type="button"
                     color="neutral"
                     variant="ghost"
-                    disabled
+                    aria-label="Reset configuration"
+                    @click="resetConfiguration"
                   />
                 </div>
               </template>
@@ -901,14 +1142,25 @@ const statistics = [
                   @submit="configurationOpen = false"
                 >
                   <div
-                    class="flex shrink-0 items-center justify-between gap-2 border-b border-default p-4"
+                    class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-default p-4"
                   >
                     <h2
                       class="font-serif text-xl font-semibold text-highlighted"
                     >
                       Configuration
                     </h2>
-                    <UButton label="Done" type="submit" />
+                    <div class="flex flex-wrap items-center justify-end gap-1">
+                      <UButton
+                        label="Reset"
+                        icon="i-lucide-rotate-ccw"
+                        type="button"
+                        color="neutral"
+                        variant="ghost"
+                        aria-label="Reset configuration"
+                        @click="resetConfiguration"
+                      />
+                      <UButton label="Done" type="submit" />
+                    </div>
                   </div>
                   <div class="min-h-0 flex-1 overflow-y-auto">
                     <ReuseConfiguration v-if="!desktop" />
@@ -965,8 +1217,36 @@ const statistics = [
                   :ui="{ list: 'flex-wrap', trigger: 'flex-none' }"
                 >
                   <template #content="{ item }">
+                    <template v-if="item.value === 'code'">
+                      <UAlert
+                        v-if="codeResult.error"
+                        color="error"
+                        variant="soft"
+                        title="Unable to generate code"
+                        :description="codeResult.error"
+                        icon="i-lucide-circle-alert"
+                        role="alert"
+                        class="mt-4"
+                      />
+                      <template v-else>
+                        <LazyCodeBlock
+                          v-if="codeResult.install"
+                          :code="codeResult.install"
+                          language="text"
+                          filename="Terminal"
+                          copy-label="Copy install command"
+                        />
+
+                        <LazyCodeBlock
+                          :code="codeResult.code"
+                          language="javascript"
+                          filename="roll.js"
+                          copy-label="Copy JavaScript"
+                        />
+                      </template>
+                    </template>
                     <UEmpty
-                      v-if="!latestRoll"
+                      v-else-if="!latestRoll"
                       icon="i-lucide-dices"
                       title="No rolls yet"
                       description="Enter some notation and roll the dice to see your results."
@@ -1054,9 +1334,6 @@ const statistics = [
                         copy-label="Copy JSON"
                       />
                     </template>
-                    <p v-else class="min-h-44 py-8 text-muted">
-                      {{ item.label }} output is not available yet.
-                    </p>
                   </template>
                 </UTabs>
 
@@ -1122,7 +1399,7 @@ const statistics = [
   inset: 0 0 auto auto;
   width: min(100%, 65rem);
   height: 15rem;
-  background: url("~/assets/images/playground-background.webp") center right /
+  background: url("~/assets/images/playground-background.png") center right /
     cover no-repeat;
   opacity: 0.75;
   pointer-events: none;
@@ -1134,5 +1411,31 @@ const statistics = [
 
 :global(html:not(.dark) .playground-artwork) {
   opacity: 0.23;
+}
+/* Keep the transition inside the sidebar; the results never move. */
+.configuration-forward-enter-active,
+.configuration-forward-leave-active,
+.configuration-back-enter-active,
+.configuration-back-leave-active {
+  transition: transform 150ms ease-in-out;
+}
+
+.configuration-forward-enter-from,
+.configuration-back-leave-to {
+  transform: translateX(-100%);
+}
+
+.configuration-forward-leave-to,
+.configuration-back-enter-from {
+  transform: translateX(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .configuration-forward-enter-active,
+  .configuration-forward-leave-active,
+  .configuration-back-enter-active,
+  .configuration-back-leave-active {
+    transition: none;
+  }
 }
 </style>

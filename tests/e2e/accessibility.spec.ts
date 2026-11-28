@@ -482,6 +482,55 @@ for (const mode of ["light", "dark"] as const) {
     await configuration.click();
     await expect(dialog).toBeVisible();
     await audit(page);
+    await dialog
+      .getByRole("button", { name: "Presenter options", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", { name: "Flag symbols", exact: true })
+      .click();
+    await expect(dialog.getByLabel("Drop", { exact: true })).toBeVisible();
+    await audit(page);
+    const back = dialog.getByRole("button", {
+      name: "Back to configuration",
+      exact: true,
+    });
+    const options = dialog.getByRole("button", {
+      name: "Presenter options",
+      exact: true,
+    });
+    await back.click();
+    await expect(options).toBeFocused();
+    const presenter = dialog.getByLabel("Presenter", { exact: true });
+    await presenter.click();
+    await page.getByRole("option", { name: "SVG", exact: true }).click();
+    await expect(presenter).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      page.getByRole("listbox", { includeHidden: true }),
+    ).toHaveCount(0);
+    await options.click();
+    await expect(back).toBeFocused();
+    await expect(dialog.getByLabel("Dice size", { exact: true })).toBeVisible();
+    await audit(page);
+    await dialog
+      .getByRole("button", { name: "Pick stroke colour", exact: true })
+      .click();
+    const colourPicker = page.getByRole("dialog", {
+      name: "Pick stroke colour",
+    });
+    await expect(colourPicker).toBeVisible();
+    await audit(page);
+    await colourPicker
+      .getByRole("button", { name: "Done", exact: true })
+      .click();
+    await expect(colourPicker).toBeHidden();
+    await back.click();
+    await expect(options).toBeFocused();
+    await presenter.click();
+    await page.getByRole("option", { name: "Text", exact: true }).click();
+    await expect(presenter).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      page.getByRole("listbox", { includeHidden: true }),
+    ).toHaveCount(0);
     await done.click();
     await expect(dialog).toBeHidden();
 
@@ -493,6 +542,15 @@ for (const mode of ["light", "dark"] as const) {
       page.getByRole("tabpanel", { name: "Text" }).getByRole("status"),
     ).toContainText("2d6+3:");
     await audit(page);
+
+    await page.getByRole("tab", { name: "Code", exact: true }).click();
+    await expect(
+      page.getByRole("tabpanel", { name: "Code" }).locator("pre code"),
+    ).toContainText("const result = new Roll");
+    await audit(page);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
 
     await page.getByRole("tab", { name: "Data", exact: true }).click();
     const code = page
