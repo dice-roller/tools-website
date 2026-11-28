@@ -247,7 +247,11 @@ test("converter is reachable from the homepage", async ({ page }) => {
     has: page.getByRole("heading", { name: "Data converter", exact: true }),
   });
   await expect(card).not.toContainText(/coming soon|planned|preview/i);
-  await expect(page.getByText("Planned", { exact: true })).toHaveCount(2);
+  const playground = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "Dice playground", exact: true }),
+  });
+  await expect(playground).not.toContainText(/coming soon|planned/i);
+  await expect(page.getByText("Planned", { exact: true })).toHaveCount(1);
   await page
     .getByRole("link", { name: "Open data converter", exact: true })
     .click();
@@ -553,7 +557,7 @@ for (const mode of ["light", "dark"] as const) {
     const shareDialog = page.getByRole("dialog", { name: "Share Playground" });
     await expect(
       shareDialog.getByRole("textbox", { name: "Share link" }),
-    ).toHaveValue(/#play=v1\./);
+    ).toHaveValue(/#play=v2\./);
     await audit(page);
     await page.keyboard.press("Escape");
     await expect(shareDialog).toBeHidden();

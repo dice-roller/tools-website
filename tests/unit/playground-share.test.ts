@@ -14,19 +14,27 @@ import type { PlaygroundSnapshot } from "../../app/utils/playground-share.ts";
 const pageUrl = "https://example.org/tools/playground";
 
 function readPayload(link: string) {
-  const payload = new URL(link).hash.slice("#play=v1.".length);
+  const payload = new URL(link).hash.slice("#play=v2.".length);
   return JSON.parse(inflateSync(Buffer.from(payload, "base64url")).toString());
 }
 
 function linkWithPayload(json: string) {
-  return pageUrl + "#play=v1." + deflateSync(json).toString("base64url");
+  return pageUrl + "#play=v2." + deflateSync(json).toString("base64url");
 }
 
-test("omits unchanged settings and restores the v1 defaults", async () => {
+test("omits unchanged settings and restores the v2 defaults", async () => {
   const snapshot = { settings: defaultShareSettings(), history: [] };
   const link = await encodePlaygroundUrl(pageUrl, snapshot);
   assert.deepEqual(readPayload(link), {});
   assert.deepEqual(await decodePlaygroundUrl(link), snapshot);
+});
+
+test("restores the original notation default from v1 links", async () => {
+  const legacy = linkWithPayload("{}").replace("#play=v2.", "#play=v1.");
+  assert.equal(
+    (await decodePlaygroundUrl(legacy)).settings.notation,
+    "4d6kh3 + 2",
+  );
 });
 
 test("packs presenter overrides and restores ordered rolls with their own bindings", async () => {
@@ -58,7 +66,7 @@ test("packs presenter overrides and restores ordered rolls with their own bindin
   const link = await encodePlaygroundUrl(pageUrl + "#previous", snapshot);
   assert.match(
     link,
-    /^https:\/\/example\.org\/tools\/playground#play=v1\.[\w-]+$/,
+    /^https:\/\/example\.org\/tools\/playground#play=v2\.[\w-]+$/,
   );
   assert.ok(link.length <= maxShareUrlLength);
 
@@ -137,14 +145,14 @@ test("rejects oversized snapshots and links", async () => {
     /too large/,
   );
   await assert.rejects(
-    decodePlaygroundUrl(pageUrl + "#play=v1." + "a".repeat(2000)),
+    decodePlaygroundUrl(pageUrl + "#play=v2." + "a".repeat(2000)),
     /too large/,
   );
 });
 
 test("rejects unsupported versions, invalid history references and invalid previews", async () => {
   await assert.rejects(
-    decodePlaygroundUrl(pageUrl + "#play=v2.e30"),
+    decodePlaygroundUrl(pageUrl + "#play=v3.e30"),
     /unsupported/,
   );
   await assert.rejects(

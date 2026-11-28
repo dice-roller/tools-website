@@ -42,6 +42,11 @@ test("playground rolls notation without switching the active tab", async ({
   await expect(
     page.getByRole("button", { name: "D6", exact: true }),
   ).toBeEnabled();
+  const bottom = (locator: Locator) =>
+    locator.evaluate((element) => element.getBoundingClientRect().bottom);
+  await expect
+    .poll(async () => Math.abs((await bottom(notation)) - (await bottom(roll))))
+    .toBeLessThan(1);
   for (const tab of ["Visual", "Text", "Data"]) {
     await page.getByRole("tab", { name: tab, exact: true }).click();
     await expect(
@@ -50,9 +55,30 @@ test("playground rolls notation without switching the active tab", async ({
   }
   await visual.click();
 
-  await notation.fill("2d6+");
+  await notation.fill("fasd");
   await roll.click();
-  await expect(page.getByRole("alert")).toBeVisible();
+  const error = page.getByRole("alert");
+  await expect(error).toBeVisible();
+  await expect
+    .poll(() =>
+      error.evaluate(
+        (element) =>
+          element.getBoundingClientRect().height /
+          parseFloat(getComputedStyle(element).lineHeight),
+      ),
+    )
+    .toBeGreaterThan(1);
+  for (const button of [
+    roll,
+    page.getByRole("button", { name: "D6", exact: true }),
+    page.getByRole("button", { name: "Examples", exact: true }),
+  ]) {
+    await expect
+      .poll(async () =>
+        Math.abs((await bottom(notation)) - (await bottom(button))),
+      )
+      .toBeLessThan(1);
+  }
   await expect(page.getByText("No rolls yet")).toBeVisible();
 
   await notation.fill("2d6+3");
@@ -277,7 +303,7 @@ test("playground shares and restores settings, history and the selected preview"
   await share.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Share Playground" });
   const link = dialog.getByRole("textbox", { name: "Share link" });
-  await expect(link).toHaveValue(/#play=v1\./);
+  await expect(link).toHaveValue(/#play=v2\./);
   const url = await link.inputValue();
   await dialog.getByRole("button", { name: "Copy link", exact: true }).click();
   expect(
@@ -761,12 +787,12 @@ test("variable examples warn and replace data before rolling", async ({
   await expect(page.getByRole("tooltip")).toContainText(
     "overwrite existing variable data",
   );
-  await expect(notation).toHaveValue("4d6kh3 + 2");
+  await expect(notation).toHaveValue("");
 
   await info.click();
   await expect(page.getByRole("tooltip")).toBeVisible();
   await expect(page.getByRole("menu")).toBeVisible();
-  await expect(notation).toHaveValue("4d6kh3 + 2");
+  await expect(notation).toHaveValue("");
 
   await attack.click({ position: { x: 8, y: 8 } });
   await expect(notation).toHaveValue("d20+$bonus");
@@ -959,6 +985,12 @@ test("code tab generates executable examples from the current configuration", as
 
   await expect(notation).toBeEnabled();
   await codeTab.click();
+  await expect(notation).toHaveValue("");
+  await expect(notation).toHaveAttribute("placeholder", "e.g. 2d6");
+  await expect(
+    panel.getByText("Enter notation to generate code"),
+  ).toBeVisible();
+  await notation.fill("4d6kh3 + 2");
   await expect(code).toHaveText(
     'import { Roll } from "@dice-roller/rpg-dice-roller";\n\nconst result = new Roll("4d6kh3 + 2");\nconsole.log(result.present());',
   );

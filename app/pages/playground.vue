@@ -319,7 +319,7 @@ function defaultConfiguration() {
 }
 
 const state = reactive({
-  notation: "4d6kh3 + 2",
+  notation: "",
   ...defaultConfiguration(),
 });
 
@@ -941,13 +941,16 @@ const statistics = computed(() =>
       >
         <fieldset :disabled="!formReady" class="min-w-0 space-y-5">
           <UCard :ui="{ body: 'p-4 sm:p-5' }">
-            <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
+            <div
+              class="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:grid-rows-[auto_auto_auto] xl:gap-y-0"
+            >
               <UFormField
                 name="notation"
                 label="Notation"
                 :error="notationFieldError"
-                class="min-w-0 flex-1"
+                class="min-w-0 xl:col-start-1 xl:row-span-3 xl:row-start-1 xl:grid xl:grid-rows-subgrid"
                 :ui="{
+                  container: 'xl:contents',
                   labelWrapper: 'justify-start gap-1',
                   hint: 'flex flex-1 items-center gap-2',
                 }"
@@ -968,15 +971,14 @@ const statistics = computed(() =>
                     aria-label="Notation guide (opens in a new tab)"
                   />
                 </template>
-                <template #error="{ error }">
-                  <span v-if="error" role="alert" class="wrap-anywhere">{{
-                    error
-                  }}</span>
+                <template v-if="notationFieldError" #error="{ error }">
+                  <span role="alert" class="wrap-anywhere">{{ error }}</span>
                 </template>
                 <UInput
                   v-model="state.notation"
+                  placeholder="e.g. 2d6"
                   size="xl"
-                  class="w-full font-mono"
+                  class="w-full font-mono xl:mt-1"
                   autocomplete="off"
                 />
               </UFormField>
@@ -985,10 +987,10 @@ const statistics = computed(() =>
                 label="Roll dice"
                 icon="i-lucide-dices"
                 size="xl"
-                class="justify-center"
+                class="justify-center xl:col-start-2 xl:row-start-2 xl:self-end"
               />
               <div
-                class="flex flex-wrap items-center gap-2 border-default xl:border-s xl:ps-4"
+                class="flex flex-wrap items-center gap-2 border-default xl:col-start-3 xl:row-start-2 xl:self-end xl:border-s xl:ps-4"
               >
                 <UButton
                   v-for="die in dice"
@@ -1571,8 +1573,15 @@ const statistics = computed(() =>
                 >
                   <template #content="{ item }">
                     <template v-if="item.value === 'code'">
+                      <UEmpty
+                        v-if="!previewRoll && !state.notation.trim()"
+                        icon="i-lucide-code"
+                        title="Enter notation to generate code"
+                        variant="naked"
+                        class="min-h-44"
+                      />
                       <UAlert
-                        v-if="codeResult.error"
+                        v-else-if="codeResult.error"
                         color="error"
                         variant="soft"
                         title="Unable to generate code"

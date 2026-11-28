@@ -23,7 +23,6 @@ export const tools: readonly Tool[] = [
     description:
       "An advanced interactive roller with configurable presenters, random number generators, variables and limits.",
     icon: "i-lucide-dices",
-    status: "Planned",
   },
   {
     id: "ast",

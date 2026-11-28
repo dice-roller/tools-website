@@ -8,11 +8,11 @@ import {
   type RollInputData,
 } from "@dice-roller/rpg-dice-roller";
 
-const sharePrefix = "#play=v1.";
+const sharePrefix = "#play=v2.";
 export const maxShareUrlLength = 2000;
 const maxSnapshotBytes = 1024 * 1024;
 
-// These defaults belong to v1 links. Keep them fixed as the Playground evolves.
+// Keep the defaults for each link version fixed as the Playground evolves.
 const rollDefaults = {
   engine: "nativeMath",
   seed: "",
@@ -23,7 +23,7 @@ const rollDefaults = {
 
 const settingsDefaults = {
   ...rollDefaults,
-  notation: "4d6kh3 + 2",
+  notation: "",
   variables: "{}",
   presenter: "Text",
   tab: "visual",
@@ -222,7 +222,7 @@ function pack(snapshot: PlaygroundSnapshot): PackedSnapshot {
   };
 }
 
-function unpack(value: unknown): PlaygroundSnapshot {
+function unpack(value: unknown, version: string): PlaygroundSnapshot {
   if (!isObject(value)) throw new Error("Invalid Playground snapshot.");
   const savedContexts: unknown = Object.hasOwn(value, "c") ? value.c : [];
   const rolls: unknown = Object.hasOwn(value, "r") ? value.r : [];
@@ -258,7 +258,9 @@ function unpack(value: unknown): PlaygroundSnapshot {
   checkPreview(value.p, history.length);
   return {
     settings: restoreSettings(
-      settingsDefaults,
+      version === "v1"
+        ? { ...settingsDefaults, notation: "4d6kh3 + 2" }
+        : settingsDefaults,
       Object.hasOwn(value, "s") ? value.s : {},
     ),
     history,
@@ -299,8 +301,8 @@ export async function decodePlaygroundUrl(
   pageUrl: string | URL,
 ): Promise<PlaygroundSnapshot> {
   const url = new URL(pageUrl);
-  const payload = url.hash.slice(sharePrefix.length);
-  if (!url.hash.startsWith(sharePrefix) || !/^[\w-]+$/.test(payload)) {
+  const [, version, payload] = /^#play=(v[12])\.([\w-]+)$/.exec(url.hash) ?? [];
+  if (!version || !payload) {
     throw new Error("Invalid or unsupported Playground share link.");
   }
   if (url.href.length > maxShareUrlLength) {
@@ -331,5 +333,5 @@ export async function decodePlaygroundUrl(
   } finally {
     await reader.cancel();
   }
-  return unpack(JSON.parse(json) as unknown);
+  return unpack(JSON.parse(json) as unknown, version);
 }
