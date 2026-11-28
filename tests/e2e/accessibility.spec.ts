@@ -486,6 +486,17 @@ for (const mode of ["light", "dark"] as const) {
     ).toContainText("2d6+3:");
     await audit(page);
 
+    await page.getByRole("tab", { name: "Data", exact: true }).click();
+    const code = page
+      .getByRole("tabpanel", { name: "Data" })
+      .locator("pre code");
+    await expect(code).toContainText('"notation": "2d6+3"');
+    await expect(code.locator("span[style]")).not.toHaveCount(0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+    await audit(page);
+
     await notation.fill("2d6+");
     await notation.press("Enter");
     await expect(page.getByRole("alert")).toBeVisible();

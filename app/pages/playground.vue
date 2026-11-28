@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AccordionItem, DropdownMenuItem, TabsItem } from "@nuxt/ui";
+import { convert } from "@dice-roller/convertor";
 import {
   Roller,
   type Roll,
@@ -22,6 +23,37 @@ const latestRoll = shallowRef<Roll>();
 const notationError = ref("");
 const configurationOpen = ref(true);
 const textResult = computed(() => latestRoll.value?.present() ?? "");
+const dataFormat = ref<"full" | "concise">("full");
+const dataFormats = [
+  { label: "Full", value: "full" },
+  { label: "Concise", value: "concise" },
+] as const;
+const dataResult = computed(() => {
+  if (!latestRoll.value) {
+    return { code: "", error: "" };
+  }
+
+  try {
+    const full = latestRoll.value.export();
+    const data =
+      dataFormat.value === "concise"
+        ? convert(full, 1, { format: "concise" })
+        : full;
+
+    return {
+      code: JSON.stringify(data, null, 2),
+      error: "",
+    };
+  } catch (cause) {
+    return {
+      code: "",
+      error:
+        cause instanceof Error
+          ? cause.message
+          : "An unexpected error occurred.",
+    };
+  }
+});
 
 // Configuration controls are placeholders until they are connected to the roller.
 const state = reactive({
@@ -526,13 +558,51 @@ const statistics = [
                     variant="naked"
                     class="min-h-44"
                   />
-                  <p
+                  <LazyCodeBlock
                     v-else-if="item.value === 'text'"
-                    class="min-h-44 py-8 font-mono wrap-anywhere"
+                    :code="textResult"
+                    language="text"
+                    hide-header
+                    copy-label="Copy text"
                     role="status"
-                  >
-                    {{ textResult }}
-                  </p>
+                  />
+                  <template v-else-if="item.value === 'data'">
+                    <div class="mt-4 flex justify-end">
+                      <UFieldGroup
+                        size="sm"
+                        role="group"
+                        aria-label="Data format"
+                      >
+                        <UButton
+                          v-for="format in dataFormats"
+                          :key="format.value"
+                          :label="format.label"
+                          :color="dataFormat === format.value ? 'primary' : 'neutral'"
+                          :variant="dataFormat === format.value ? 'solid' : 'outline'"
+                          :aria-pressed="dataFormat === format.value"
+                          type="button"
+                          @click="dataFormat = format.value"
+                        />
+                      </UFieldGroup>
+                    </div>
+                    <UAlert
+                      v-if="dataResult.error"
+                      color="error"
+                      variant="soft"
+                      title="Unable to export roll"
+                      :description="dataResult.error"
+                      icon="i-lucide-circle-alert"
+                      role="alert"
+                      class="mt-4"
+                    />
+                    <LazyCodeBlock
+                      v-else
+                      :code="dataResult.code"
+                      language="json"
+                      hide-header
+                      copy-label="Copy JSON"
+                    />
+                  </template>
                   <p v-else class="min-h-44 py-8 text-muted">
                     {{ item.label }} output is not available yet.
                   </p>
