@@ -548,6 +548,16 @@ for (const mode of ["light", "dark"] as const) {
     await preview.press("Enter");
     await expect(preview).toHaveAttribute("aria-pressed", "true");
     await audit(page);
+    const share = page.getByRole("button", { name: "Share", exact: true });
+    await share.press("Enter");
+    const shareDialog = page.getByRole("dialog", { name: "Share Playground" });
+    await expect(
+      shareDialog.getByRole("textbox", { name: "Share link" }),
+    ).toHaveValue(/#play=v1\./);
+    await audit(page);
+    await page.keyboard.press("Escape");
+    await expect(shareDialog).toBeHidden();
+    await expect(share).toBeFocused();
     await page
       .getByRole("button", { name: "About Average", exact: true })
       .press("Enter");

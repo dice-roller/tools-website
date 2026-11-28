@@ -5,7 +5,6 @@ import {
   Roller,
   presenters,
   RollSettings,
-  type Roll,
   type RollInputData,
   type RollLimits,
 } from "@dice-roller/rpg-dice-roller";
@@ -14,6 +13,11 @@ import { presenterDefinitions } from "~/data/presenter-options";
 import { downloadFile } from "~/utils/download-file";
 import { buildPlaygroundCode } from "~/utils/playground-code";
 import {
+  decodePlaygroundUrl,
+  encodePlaygroundUrl,
+  type PlaygroundSnapshot,
+} from "~/utils/playground-share";
+import {
   breakpointsTailwind,
   createReusableTemplate,
   useBreakpoints,
@@ -21,8 +25,21 @@ import {
 
 // Prerendered controls must not accept input before their Vue handlers exist.
 const formReady = ref(false);
-onMounted(() => {
-  formReady.value = true;
+onNuxtReady(async () => {
+  try {
+    if (window.location.hash.startsWith("#play=")) {
+      restorePlayground(await decodePlaygroundUrl(window.location.href));
+    }
+  } catch (cause) {
+    toast.add({
+      title: "Could not open Playground link",
+      description:
+        cause instanceof Error ? cause.message : "Invalid share link.",
+      color: "error",
+    });
+  } finally {
+    formReady.value = true;
+  }
 });
 
 const { documentationBaseUrl } = useRuntimeConfig().public;
@@ -64,7 +81,7 @@ function defaultTextOptions() {
   };
 }
 
-const latestRoll = shallowRef<Roll>();
+const latestRoll = shallowRef<(typeof historyRolls.value)[number]>();
 const previewRoll = shallowRef<(typeof historyRolls.value)[number]>();
 const displayedRoll = computed(() => previewRoll.value ?? latestRoll.value);
 const historyRolls = shallowRef(roller.history.rolls);
@@ -198,6 +215,10 @@ const advancedOpen = ref<string[]>([]);
 
 type RollExportFormat = "full" | "concise";
 const dataFormat = ref<RollExportFormat>("full");
+const activeTab = ref("visual");
+const shareUrl = ref("");
+const shareError = ref("");
+const sharing = ref(false);
 const dataFormats = [
   { label: "Full", value: "full" },
   { label: "Concise", value: "concise" },
@@ -321,6 +342,109 @@ function snapshotRollSettings() {
     maxIterations,
     maxGeneratedRolls,
   };
+}
+
+async function prepareShare() {
+  shareUrl.value = "";
+  shareError.value = "";
+  sharing.value = true;
+  try {
+    function snapshotEntry(roll: (typeof historyRolls.value)[number]) {
+      const original = historySettings.get(roll);
+      if (!original) throw new Error("A roll is missing its saved settings.");
+      return {
+        roll,
+        settings: { ...original.form, seed: original.seed?.toString() ?? "" },
+        data: original.data,
+      };
+    }
+
+    const preview = previewRoll.value
+      ? historyRolls.value.indexOf(previewRoll.value)
+      : -1;
+    const latest = latestRoll.value;
+    shareUrl.value = await encodePlaygroundUrl(window.location.href, {
+      settings: {
+        ...state,
+        tab: activeTab.value,
+        dataFormat: dataFormat.value,
+      },
+      history: historyRolls.value.map(snapshotEntry),
+      ...(latest &&
+        !historyRolls.value.includes(latest) && {
+          latest: snapshotEntry(latest),
+        }),
+      ...(preview >= 0 && { preview }),
+    });
+  } catch (cause) {
+    shareError.value =
+      cause instanceof Error ? cause.message : "Could not create a share link.";
+  } finally {
+    sharing.value = false;
+  }
+}
+
+async function copyShareLink() {
+  try {
+    await navigator.clipboard.writeText(shareUrl.value);
+    toast.add({ title: "Share link copied" });
+  } catch {
+    toast.add({
+      title: "Could not copy the link",
+      description: "You can select and copy it from the Share link field.",
+      color: "error",
+    });
+  }
+}
+
+function restorePlayground(snapshot: PlaygroundSnapshot) {
+  const { tab, dataFormat: format, ...configuration } = snapshot.settings;
+  if (
+    !Object.hasOwn(presenterDefinitions, configuration.presenter) ||
+    !engineRegistry.names.includes(configuration.engine) ||
+    !tabs.some((item) => item.value === tab) ||
+    (format !== "full" && format !== "concise")
+  ) {
+    throw new Error("The link contains unsupported Playground settings.");
+  }
+
+  const entries = snapshot.latest
+    ? [...snapshot.history, snapshot.latest]
+    : snapshot.history;
+  const records = entries.map(({ roll, settings, data }, index) => {
+    const seed = settings.seed === "" ? undefined : Number(settings.seed);
+    return {
+      roll,
+      metadata: {
+        id: index,
+        seed,
+        data,
+        form: {
+          ...settings,
+          notation: roll.notation,
+          variables: JSON.stringify(data, null, 2),
+        },
+        engine: engineRegistry.create(settings.engine, seed),
+      },
+    };
+  });
+
+  Object.assign(state, configuration);
+  activeTab.value = tab;
+  dataFormat.value = format;
+  roller.history.clear();
+  for (const [index, record] of records.entries()) {
+    historySettings.set(record.roll, record.metadata);
+    if (index < snapshot.history.length) roller.history.add(record.roll);
+  }
+  nextHistoryRollId = records.length;
+  historyRolls.value = roller.history.rolls;
+  latestRoll.value = records.at(-1)?.roll;
+  previewRoll.value =
+    snapshot.preview === undefined
+      ? undefined
+      : historyRolls.value[snapshot.preview];
+  resetEngine = true;
 }
 
 function rerollFromHistory(roll: (typeof historyRolls.value)[number]) {
@@ -1390,21 +1514,58 @@ const statistics = computed(() =>
                           :disabled="!displayedRoll"
                         />
                       </UDropdownMenu>
-                      <UButton
-                        label="Share"
-                        icon="i-lucide-share-2"
-                        type="button"
-                        color="neutral"
-                        variant="outline"
-                        disabled
-                      />
+                      <UModal
+                        title="Share Playground"
+                        description="Anyone with the link can view the current settings and roll history."
+                        :ui="{ description: 'text-toned' }"
+                      >
+                        <UButton
+                          label="Share"
+                          icon="i-lucide-share-2"
+                          type="button"
+                          color="neutral"
+                          variant="outline"
+                          @click="prepareShare"
+                        />
+                        <template #body>
+                          <p v-if="sharing" role="status">
+                            Creating share link…
+                          </p>
+                          <UAlert
+                            v-else-if="shareError"
+                            role="alert"
+                            color="error"
+                            variant="soft"
+                            title="Could not create share link"
+                            :description="shareError"
+                          />
+                          <div v-else class="flex flex-wrap items-end gap-3">
+                            <UFormField
+                              label="Share link"
+                              class="min-w-0 flex-1"
+                            >
+                              <UInput
+                                :model-value="shareUrl"
+                                readonly
+                                class="w-full"
+                              />
+                            </UFormField>
+                            <UButton
+                              label="Copy link"
+                              icon="i-lucide-copy"
+                              type="button"
+                              @click="copyShareLink"
+                            />
+                          </div>
+                        </template>
+                      </UModal>
                     </div>
                   </div>
                 </template>
 
                 <UTabs
+                  v-model="activeTab"
                   :items="tabs"
-                  default-value="visual"
                   variant="link"
                   :ui="{ list: 'flex-wrap', trigger: 'flex-none' }"
                 >

@@ -16,7 +16,8 @@
     "typecheck": "nuxt typecheck",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "node --experimental-strip-types --test tests/unit/*.test.ts"
   },
   "dependencies": {
     "@dice-roller/convertor": "1.0.0-beta.0",

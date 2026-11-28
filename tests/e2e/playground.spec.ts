@@ -243,6 +243,72 @@ test("playground downloads the displayed roll and the history as JSON", async ({
   }
 });
 
+test("playground shares and restores settings, history and the selected preview", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: {
+        writeText(value: string) {
+          sessionStorage.setItem("copied-playground-link", value);
+          return Promise.resolve();
+        },
+      },
+    });
+  });
+  await page.goto("/playground");
+  const notation = page.getByLabel("Notation", { exact: true });
+  const roll = page.getByRole("button", { name: "Roll dice", exact: true });
+  const history = page.getByRole("region", { name: "Roll history" });
+  for (const [value, count] of [
+    ["1+1", "1 roll"],
+    ["2+2", "2 rolls"],
+  ] as const) {
+    await notation.fill(value);
+    await roll.click();
+    await expect(history.getByRole("status")).toHaveText(count);
+  }
+  await notation.fill("3+3");
+  await page.getByRole("tab", { name: "Text", exact: true }).click();
+  const preview = history.getByRole("button", { name: "Preview roll 1: 1+1" });
+  await preview.click();
+
+  const share = page.getByRole("button", { name: "Share", exact: true });
+  await share.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Share Playground" });
+  const link = dialog.getByRole("textbox", { name: "Share link" });
+  await expect(link).toHaveValue(/#play=v1\./);
+  const url = await link.inputValue();
+  await dialog.getByRole("button", { name: "Copy link", exact: true }).click();
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("copied-playground-link")),
+  ).toBe(url);
+  await page.keyboard.press("Escape");
+  await expect(share).toBeFocused();
+
+  await page.goto(url);
+  await page.reload();
+  await expect(notation).toHaveValue("3+3");
+  await expect(history.getByRole("status")).toHaveText("2 rolls");
+  await expect(preview).toHaveAttribute("aria-pressed", "true");
+  await expect(history.getByRole("listitem").first()).toContainText("2+2");
+  await expect(
+    page.getByRole("tabpanel", { name: "Text" }).getByRole("status"),
+  ).toHaveText(/^1\+1:.*= 2$/);
+});
+
+test("an invalid share link leaves the playground usable", async ({ page }) => {
+  await page.goto("/playground#play=v99.invalid");
+  await expect(
+    page.getByText("Could not open Playground link", { exact: true }),
+  ).toBeVisible();
+  const notation = page.getByLabel("Notation", { exact: true });
+  await notation.fill("1+1");
+  await page.getByRole("button", { name: "Roll dice", exact: true }).click();
+  const history = page.getByRole("region", { name: "Roll history" });
+  await expect(history.getByRole("status")).toHaveText("1 roll");
+});
+
 test("playground shows statistics for the displayed roll", async ({ page }) => {
   await page.goto("/playground");
   const stats = page.locator('dl[aria-label="Roll statistics"]');
