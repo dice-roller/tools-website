@@ -1896,8 +1896,10 @@ const statistics = computed(() =>
   inset: 0 0 auto auto;
   width: min(100%, 65rem);
   height: 15rem;
-  background: url("~/assets/images/playground-background.png") center right /
-    cover no-repeat;
+  background-image: url("~/assets/images/playground-background.png");
+  background-size: cover;
+  background-position: center right;
+  background-repeat: no-repeat;
   opacity: 0.75;
   pointer-events: none;
   mask-image:

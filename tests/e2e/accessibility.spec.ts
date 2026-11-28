@@ -43,11 +43,11 @@ for (const mode of ["light", "dark"] as const) {
   test.describe(`${mode} colour mode`, () => {
     test("homepage meets automated WCAG A/AA rules", async ({ page }) => {
       await openHomepage(page, mode);
-      const hero = page.locator(".home-hero");
-      await expect(hero).toBeVisible();
+      await expect(page.locator(".home-hero")).toBeVisible();
+      const artwork = page.locator(".home-hero-artwork");
       // Ensure the decorative background is bundled and actually loads.
       expect(
-        await hero.evaluate(async (element) => {
+        await artwork.evaluate(async (element) => {
           const background = getComputedStyle(element).backgroundImage;
           const url = background.match(/url\(["']?([^"')]+)["']?\)/)?.[1];
           if (!url) return false;
