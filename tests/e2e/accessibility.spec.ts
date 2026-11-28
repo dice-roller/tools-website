@@ -60,22 +60,28 @@ for (const mode of ["light", "dark"] as const) {
       await audit(page);
     });
 
-    test("desktop Tools dropdown is keyboard accessible", async ({ page }) => {
+    test("desktop tool links are keyboard accessible", async ({ page }) => {
+      await page.setViewportSize({ width: 1024, height: 800 });
       await openHomepage(page, mode);
-      const trigger = page.getByRole("button", { name: "Tools", exact: true });
-      await trigger.focus();
-      await page.keyboard.press("Enter");
-      await expect(trigger).toHaveAttribute("aria-expanded", "true");
-      await expect(
-        page.getByRole("link", { name: "Data converter", exact: true }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("link", { name: /AST explorer/ }),
-      ).toBeVisible();
+      const nav = page.getByRole("navigation", { name: "Main navigation" });
+      const links = nav.getByRole("link");
+      await expect(links).toHaveText([
+        "Data converter",
+        "Dice playground",
+        /AST explorer.*Planned/,
+      ]);
+      const ast = nav.getByRole("link", { name: /AST explorer/ });
+      await expect(ast).toHaveAttribute("href", /#ast$/);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(1024);
       await audit(page);
-      await page.keyboard.press("Escape");
-      await expect(trigger).toHaveAttribute("aria-expanded", "false");
-      await expect(trigger).toBeFocused();
+      await nav
+        .getByRole("link", { name: "Data converter", exact: true })
+        .press("Enter");
+      await expect(page).toHaveURL(/\/converter\/?$/);
+      await ast.press("Enter");
+      await expect(page).toHaveURL(/#ast$/);
     });
 
     test("mobile menu meets automated WCAG A/AA rules", async ({ page }) => {
@@ -91,7 +97,7 @@ for (const mode of ["light", "dark"] as const) {
         dialog.getByRole("link", { name: "Data converter", exact: true }),
       ).toBeVisible();
       await expect(
-        dialog.getByRole("link", { name: "AST explorer" }),
+        dialog.getByRole("link", { name: /AST explorer.*Planned/ }),
       ).toBeVisible();
       await audit(page);
       await page.keyboard.press("Escape");
@@ -251,7 +257,6 @@ test("converter is reachable from the homepage", async ({ page }) => {
     has: page.getByRole("heading", { name: "Dice playground", exact: true }),
   });
   await expect(playground).not.toContainText(/coming soon|planned/i);
-  await expect(page.getByText("Planned", { exact: true })).toHaveCount(1);
   await page
     .getByRole("link", { name: "Open data converter", exact: true })
     .click();
@@ -420,10 +425,8 @@ test("documentation links use the configured base URL", async ({ page }) => {
   ).toHaveAttribute("href", url);
   await expect(
     page
-      .getByRole("navigation", { name: "Main navigation" })
-      .getByRole("link", {
-        name: "Documentation",
-      }),
+      .getByRole("banner")
+      .getByRole("link", { name: "Documentation", exact: true }),
   ).toHaveAttribute("href", url);
   await expect(
     page.getByRole("contentinfo").getByRole("link", { name: "Documentation" }),

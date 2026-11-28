@@ -4,31 +4,13 @@ import { githubOrganisationUrl, tools } from "~/data/tools";
 
 const documentationUrl = useRuntimeConfig().public.documentationBaseUrl;
 
-const items: NavigationMenuItem[] = [
-  { label: "Home", to: "/", exact: true },
-  {
-    label: "Tools",
-    children: tools.map((tool) => ({
-      label: tool.title,
-      description: tool.status,
-      icon: tool.icon,
-      to: tool.path ?? { path: "/", hash: `#${tool.id}` },
-      exactHash: true,
-    })),
-  },
-  { label: "Documentation", to: documentationUrl, target: "_blank" },
-];
-
-const mobileItems: NavigationMenuItem[] = [
-  { label: "Home", to: "/", exact: true },
-  ...tools.map((tool) => ({
-    label: tool.title,
-    icon: tool.icon,
-    to: tool.path ?? { path: "/", hash: `#${tool.id}` },
-    exactHash: true,
-  })),
-  { label: "Documentation", to: documentationUrl, target: "_blank" },
-];
+const items = tools.map((tool) => ({
+  label: tool.title,
+  icon: tool.icon,
+  to: tool.path ?? { path: "/", hash: `#${tool.id}` },
+  exactHash: true,
+  badge: tool.status && { label: tool.status, variant: "subtle", size: "xs" },
+})) satisfies NavigationMenuItem[];
 </script>
 
 <template>
@@ -44,14 +26,17 @@ const mobileItems: NavigationMenuItem[] = [
         <SiteLogo />
       </template>
 
-      <UNavigationMenu
-        as="nav"
-        aria-label="Main navigation"
-        :items="items"
-        content-orientation="vertical"
-      />
+      <UNavigationMenu as="nav" aria-label="Main navigation" :items="items" />
 
       <template #right>
+        <UButton
+          :to="documentationUrl"
+          target="_blank"
+          label="Documentation"
+          color="neutral"
+          variant="ghost"
+          class="hidden lg:inline-flex"
+        />
         <UButton
           :to="githubOrganisationUrl"
           target="_blank"
@@ -67,9 +52,18 @@ const mobileItems: NavigationMenuItem[] = [
         <UNavigationMenu
           as="nav"
           aria-label="Mobile navigation"
-          :items="mobileItems"
+          :items="items"
           orientation="vertical"
           class="-mx-2.5"
+        />
+        <UButton
+          :to="documentationUrl"
+          target="_blank"
+          label="Documentation"
+          trailing-icon="i-heroicons-arrow-up-right"
+          color="neutral"
+          variant="ghost"
+          class="mt-2"
         />
       </template>
     </UHeader>
