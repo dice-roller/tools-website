@@ -443,3 +443,91 @@ test("shared GitHub links point to the Dice Roller organisation", async ({
     page.getByRole("contentinfo").getByRole("link", { name: "GitHub" }),
   ).toHaveAttribute("href", "https://github.com/dice-roller");
 });
+
+for (const mode of ["light", "dark"] as const) {
+  test(`playground preview reflows and is accessible in ${mode} mode`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: mode });
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto("/playground");
+    await expect(
+      page.getByRole("heading", { name: "Dice playground", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator("html")).toHaveClass(new RegExp(mode));
+    await expect(
+      page.getByRole("button", { name: "Roll dice", exact: true }),
+    ).toBeEnabled();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+    await audit(page);
+    const examples = page.getByRole("button", {
+      name: "Examples",
+      exact: true,
+    });
+    await examples.click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await audit(page);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Collapse configuration" }).click();
+    await expect(
+      page.getByRole("button", { name: "Expand configuration" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    await audit(page);
+    await page.getByRole("button", { name: "Expand configuration" }).click();
+
+    const notation = page.getByLabel("Notation", { exact: true });
+    await notation.fill("2d6+3");
+    await notation.press("Enter");
+    await page.getByRole("tab", { name: "Text", exact: true }).click();
+    await expect(
+      page.getByRole("tabpanel", { name: "Text" }).getByRole("status"),
+    ).toContainText("2d6+3:");
+    await audit(page);
+
+    await notation.fill("2d6+");
+    await notation.press("Enter");
+    await expect(page.getByRole("alert")).toBeVisible();
+    await audit(page);
+  });
+}
+
+for (const mode of ["light", "dark"] as const) {
+  test(`playground artwork opacity is isolated in ${mode} mode`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: mode });
+    await page.goto("/playground");
+    await expect(page.locator("html")).toHaveClass(new RegExp(mode));
+    await expect(page.locator("html")).toHaveCSS("opacity", "1");
+    await expect(page.locator(".playground-artwork")).toHaveCSS(
+      "opacity",
+      mode === "light" ? "0.23" : "0.75",
+    );
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(page.locator("html")).toHaveCSS("opacity", "1");
+  });
+}
+
+test("playground links to the configured notation guide", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/playground");
+  const documentationBaseUrl =
+    process.env.NUXT_PUBLIC_DOCUMENTATION_BASE_URL ??
+    "https://dice-roller.github.io/documentation/";
+  const guide = page.getByRole("link", {
+    name: "Notation guide (opens in a new tab)",
+  });
+  await expect(guide).toBeVisible();
+  await expect(guide).toHaveAttribute(
+    "href",
+    new URL("guide/notation/", `${documentationBaseUrl.replace(/\/+$/, "")}/`)
+      .href,
+  );
+  await expect(guide).toHaveAttribute("target", "_blank");
+  await expect(page.getByLabel("Notation", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "About Notation", exact: true }),
+  ).toBeVisible();
+});

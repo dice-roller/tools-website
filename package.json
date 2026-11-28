@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@dice-roller/convertor": "1.0.0-alpha.0",
+    "@dice-roller/rpg-dice-roller": "6.0.0-beta.8",
     "@fontsource-variable/dm-sans": "^5.2.0",
     "@fontsource-variable/source-serif-4": "^5.2.0",
     "@iconify-json/heroicons": "^1.2.0",
