@@ -548,6 +548,13 @@ for (const mode of ["light", "dark"] as const) {
     await preview.press("Enter");
     await expect(preview).toHaveAttribute("aria-pressed", "true");
     await audit(page);
+    await page
+      .getByRole("button", { name: "About Average", exact: true })
+      .press("Enter");
+    await expect(page.getByRole("tooltip")).toContainText("statistical mean");
+    await audit(page);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toBeHidden();
 
     await page.getByRole("tab", { name: "Code", exact: true }).click();
     await expect(

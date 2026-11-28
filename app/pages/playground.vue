@@ -11,6 +11,7 @@ import {
 } from "@dice-roller/rpg-dice-roller";
 import { SvgPresenter } from "@dice-roller/svg-presenter";
 import { presenterDefinitions } from "~/data/presenter-options";
+import { downloadFile } from "~/utils/download-file";
 import { buildPlaygroundCode } from "~/utils/playground-code";
 import {
   breakpointsTailwind,
@@ -72,6 +73,7 @@ const historySettings = new WeakMap<
   {
     id: number;
     seed: number | undefined;
+    data: RollInputData;
     form: ReturnType<typeof snapshotRollSettings>;
     engine: typeof roller.generator.engine;
   }
@@ -194,25 +196,80 @@ watch(configurationOpen, (open) => {
 
 const advancedOpen = ref<string[]>([]);
 
-const dataFormat = ref<"full" | "concise">("full");
+type RollExportFormat = "full" | "concise";
+const dataFormat = ref<RollExportFormat>("full");
 const dataFormats = [
   { label: "Full", value: "full" },
   { label: "Concise", value: "concise" },
 ] as const;
+const toast = useToast();
+
+function conciseExport(roll: (typeof historyRolls.value)[number]) {
+  return convert(roll.export(), 1, {
+    format: "concise",
+    data: historySettings.get(roll)?.data,
+  });
+}
+
+function exportRollJson(
+  roll: (typeof historyRolls.value)[number],
+  format: RollExportFormat,
+) {
+  const output = format === "full" ? roll.export() : conciseExport(roll);
+  return JSON.stringify(output, null, 2);
+}
+
+function downloadExport(scope: "roll" | "history", format: RollExportFormat) {
+  const roll = displayedRoll.value;
+  if (scope === "roll" && !roll) return;
+
+  try {
+    // Concise history is a list of rolls, each with its own variable bindings.
+    const json =
+      scope === "roll" && roll
+        ? exportRollJson(roll, format)
+        : JSON.stringify(
+            format === "full"
+              ? roller.export()
+              : historyRolls.value.map(conciseExport),
+            null,
+            2,
+          );
+    const blob = new Blob([json], {
+      type: "application/json",
+    });
+    downloadFile(blob, `dice-${scope}-${format}.json`);
+  } catch (cause) {
+    toast.add({
+      title:
+        scope === "roll" ? "Could not export roll" : "Could not export history",
+      description:
+        cause instanceof Error
+          ? cause.message
+          : "An unexpected error occurred.",
+      color: "error",
+    });
+  }
+}
+
+function exportItems(scope: "roll" | "history"): DropdownMenuItem[] {
+  return dataFormats.map(({ label, value }) => ({
+    label: `${label} JSON`,
+    onSelect: () => downloadExport(scope, value),
+  }));
+}
+
+const rollExportItems = exportItems("roll");
+const historyExportItems = exportItems("history");
+
 const dataResult = computed(() => {
   if (!displayedRoll.value) {
     return { code: "", error: "" };
   }
 
   try {
-    const full = displayedRoll.value.export();
-    const data =
-      dataFormat.value === "concise"
-        ? convert(full, 1, { format: "concise" })
-        : full;
-
     return {
-      code: JSON.stringify(data, null, 2),
+      code: exportRollJson(displayedRoll.value, dataFormat.value),
       error: "",
     };
   } catch (cause) {
@@ -571,6 +628,7 @@ function performRoll(resumeEngine?: typeof roller.generator.engine) {
     historySettings.set(roll, {
       id: nextHistoryRollId++,
       seed,
+      data,
       form: snapshotRollSettings(),
       engine: roller.generator.engine,
     });
@@ -703,14 +761,39 @@ const advancedOptions: AccordionItem[] = [
   },
 ];
 
-const statistics = [
-  "Total",
-  "Kept dice",
-  "Dropped dice",
-  "Minimum",
-  "Maximum",
-  "Average",
-];
+const statisticFields = [
+  { label: "Total", key: "total", tooltip: null },
+  {
+    label: "Minimum",
+    key: "minTotal",
+    tooltip:
+      "Evaluates the notation with each die at its lowest face value. The actual total can be lower, for example when subtracting a die roll.",
+  },
+  {
+    label: "Maximum",
+    key: "maxTotal",
+    tooltip:
+      "Evaluates the notation with each die at its highest face value. The actual total can be higher, for example when subtracting a die roll.",
+  },
+  {
+    label: "Average",
+    key: "averageTotal",
+    tooltip:
+      "Uses average die values where possible, or the midpoint of the calculated Minimum and Maximum. With modifiers, non-linear maths or random dice parameters, it can differ from the statistical mean.",
+  },
+] as const;
+
+const statistics = computed(() =>
+  statisticFields.map((field) => {
+    let value: number | undefined;
+    try {
+      value = displayedRoll.value?.[field.key];
+    } catch {
+      // An extreme face can make an otherwise valid expression fail.
+    }
+    return { ...field, value };
+  }),
+);
 </script>
 
 <template>
@@ -1292,23 +1375,21 @@ const statistics = [
                       Result
                     </h2>
                     <div class="flex flex-wrap gap-2">
-                      <UButton
-                        label="Copy"
-                        icon="i-lucide-copy"
-                        type="button"
-                        color="neutral"
-                        variant="outline"
-                        disabled
-                      />
-                      <UButton
-                        label="Export"
-                        icon="i-lucide-download"
-                        trailing-icon="i-lucide-chevron-down"
-                        type="button"
-                        color="neutral"
-                        variant="outline"
-                        disabled
-                      />
+                      <UDropdownMenu
+                        :items="rollExportItems"
+                        :content="{ align: 'end' }"
+                      >
+                        <UButton
+                          label="Export"
+                          aria-label="Export roll"
+                          icon="i-lucide-download"
+                          trailing-icon="i-lucide-chevron-down"
+                          type="button"
+                          color="neutral"
+                          variant="outline"
+                          :disabled="!displayedRoll"
+                        />
+                      </UDropdownMenu>
                       <UButton
                         label="Share"
                         icon="i-lucide-share-2"
@@ -1356,6 +1437,7 @@ const statistics = [
                         />
                       </template>
                     </template>
+
                     <UEmpty
                       v-else-if="!displayedRoll"
                       icon="i-lucide-dices"
@@ -1364,6 +1446,7 @@ const statistics = [
                       variant="naked"
                       class="min-h-44"
                     />
+
                     <template v-else-if="item.value === 'visual'">
                       <UAlert
                         v-if="visualResult.error"
@@ -1375,6 +1458,7 @@ const statistics = [
                         role="alert"
                         class="mt-4"
                       />
+
                       <!-- The bundled SVG presenter escapes roll text and uses trusted artwork. -->
                       <!-- eslint-disable vue/no-v-html -->
                       <div
@@ -1388,12 +1472,13 @@ const statistics = [
                       <!-- eslint-enable vue/no-v-html -->
                       <p
                         v-else
-                        class="min-h-44 py-8 font-mono whitespace-pre-wrap wrap-anywhere"
+                        class="py-8 font-mono whitespace-pre-wrap wrap-anywhere text-center"
                         role="status"
                       >
                         {{ visualResult.output }}
                       </p>
                     </template>
+
                     <LazyCodeBlock
                       v-else-if="item.value === 'text'"
                       :code="textResult"
@@ -1449,18 +1534,28 @@ const statistics = [
                 </UTabs>
 
                 <dl
-                  class="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-default bg-default sm:grid-cols-3 xl:grid-cols-6"
+                  aria-label="Roll statistics"
+                  class="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-default bg-default sm:grid-cols-4"
                 >
                   <div
                     v-for="statistic in statistics"
-                    :key="statistic"
-                    class="bg-elevated p-3 text-center"
+                    :key="statistic.key"
+                    class="min-w-0 bg-elevated p-3 text-center"
                   >
-                    <dt class="text-sm text-toned">{{ statistic }}</dt>
-                    <dd
-                      class="font-serif text-2xl font-semibold text-highlighted"
+                    <dt
+                      class="flex min-h-7 flex-wrap items-center justify-center text-sm text-toned"
                     >
-                      —
+                      {{ statistic.label }}
+                      <FieldInfo
+                        v-if="statistic.tooltip"
+                        :label="statistic.label"
+                        :text="statistic.tooltip"
+                      />
+                    </dt>
+                    <dd
+                      class="font-serif text-2xl font-semibold break-all text-highlighted"
+                    >
+                      {{ statistic.value ?? "—" }}
                     </dd>
                   </div>
                 </dl>
@@ -1486,15 +1581,32 @@ const statistics = [
                         {{ historyRows.length === 1 ? "roll" : "rolls" }}
                       </UBadge>
                     </div>
-                    <UButton
-                      label="Clear history"
-                      icon="i-lucide-trash-2"
-                      type="button"
-                      color="neutral"
-                      variant="ghost"
-                      :disabled="!historyRows.length"
-                      @click="clearHistory"
-                    />
+                    <div class="flex flex-wrap gap-2">
+                      <UDropdownMenu
+                        :items="historyExportItems"
+                        :content="{ align: 'end' }"
+                      >
+                        <UButton
+                          label="Export"
+                          aria-label="Export history"
+                          icon="i-lucide-download"
+                          trailing-icon="i-lucide-chevron-down"
+                          type="button"
+                          color="neutral"
+                          variant="outline"
+                          :disabled="!historyRows.length"
+                        />
+                      </UDropdownMenu>
+                      <UButton
+                        label="Clear history"
+                        icon="i-lucide-trash-2"
+                        type="button"
+                        color="neutral"
+                        variant="ghost"
+                        :disabled="!historyRows.length"
+                        @click="clearHistory"
+                      />
+                    </div>
                   </div>
                 </template>
 

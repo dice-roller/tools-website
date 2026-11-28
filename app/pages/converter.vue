@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { downloadFile } from "~/utils/download-file";
 import {
   convert,
   detectVersion,
@@ -360,19 +361,15 @@ async function downloadOutput() {
   const blob = new Blob([output.value], {
     type: json ? "application/json" : "text/plain;charset=utf-8",
   });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
   const stem =
     uploadedFilename.value.replace(/\.[^.]+$/, "") || "converted-roll";
   const target =
     state.targetVersion === "latest" ? latestVersion : state.targetVersion;
   const version = target === "legacy" ? "v5" : `schema-${target}`;
-  link.download = `${stem}-${version}-${state.format}.${json ? "json" : "txt"}`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadFile(
+    blob,
+    `${stem}-${version}-${state.format}.${json ? "json" : "txt"}`,
+  );
   showStatus("Download started.");
   await revealFeedback();
 }

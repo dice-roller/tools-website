@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
@@ -162,6 +163,105 @@ test("playground removes and clears history without changing the result", async 
   await expect(heading).toBeFocused();
 });
 
+test("playground downloads the displayed roll and the history as JSON", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 812 });
+  await page.goto("/playground");
+  const rollExport = page.getByRole("button", {
+    name: "Export roll",
+    exact: true,
+  });
+  const historyExport = page.getByRole("button", {
+    name: "Export history",
+    exact: true,
+  });
+  const notation = page.getByLabel("Notation", { exact: true });
+  const roll = page.getByRole("button", { name: "Roll dice", exact: true });
+  const history = page.getByRole("region", { name: "Roll history" });
+
+  await expect(rollExport).toBeDisabled();
+  await expect(historyExport).toBeDisabled();
+  await page.getByRole("button", { name: "Variables", exact: true }).click();
+  const variables = page.getByLabel("Variables (JSON data)", { exact: true });
+  await variables.fill('{"bonus":1}');
+  await notation.fill("1d1+$bonus");
+  await roll.click();
+  await expect(history.getByRole("status")).toHaveText("1 roll");
+  await variables.fill('{"bonus":2}');
+  await notation.fill("1d1+$bonus+1");
+  await roll.click();
+  await expect(history.getByRole("status")).toHaveText("2 rolls");
+  await page
+    .getByRole("button", { name: "Preview roll 1: 1d1+$bonus", exact: true })
+    .click();
+
+  await page.getByRole("tab", { name: "Data", exact: true }).click();
+  const panel = page.getByRole("tabpanel", { name: "Data" });
+  await panel.getByRole("button", { name: "Concise", exact: true }).click();
+  await expect(panel.locator("pre code")).toContainText("1d1+$bonus");
+
+  for (const [trigger, scope, format, expected] of [
+    [
+      rollExport,
+      "roll",
+      "Full",
+      { type: "roll", notation: "1d1+$bonus", total: 2 },
+    ],
+    [rollExport, "roll", "Concise", { notation: "1d1+$bonus", rolls: [[1]] }],
+    [
+      historyExport,
+      "history",
+      "Full",
+      {
+        type: "history",
+        rolls: [{ notation: "1d1+$bonus" }, { notation: "1d1+$bonus+1" }],
+        total: 6,
+      },
+    ],
+    [
+      historyExport,
+      "history",
+      "Concise",
+      [
+        { notation: "1d1+$bonus", rolls: [[1]] },
+        { notation: "1d1+$bonus+1", rolls: [[1]] },
+      ],
+    ],
+  ] as const) {
+    await trigger.click();
+    const pending = page.waitForEvent("download");
+    await page
+      .getByRole("menuitem", { name: `${format} JSON`, exact: true })
+      .click();
+    const download = await pending;
+    expect(download.suggestedFilename()).toBe(
+      `dice-${scope}-${format.toLowerCase()}.json`,
+    );
+    const file = await download.path();
+    expect(JSON.parse(await readFile(file, "utf8"))).toMatchObject(expected);
+  }
+});
+
+test("playground shows statistics for the displayed roll", async ({ page }) => {
+  await page.goto("/playground");
+  const stats = page.locator('dl[aria-label="Roll statistics"]');
+  const values = stats.locator("dd");
+  const notation = page.getByLabel("Notation", { exact: true });
+  const roll = page.getByRole("button", { name: "Roll dice", exact: true });
+
+  await expect(values).toHaveText(["—", "—", "—", "—"]);
+  await notation.fill("10-d6");
+  await roll.click();
+  await expect(values).toHaveText([/^[4-9]$/, "9", "4", "6.5"]);
+  await notation.fill("2+3");
+  await roll.click();
+  await expect(values).toHaveText(["5", "5", "5", "5"]);
+
+  await page.getByRole("button", { name: "Preview roll 1: 10-d6" }).click();
+  await expect(values).toHaveText([/^[4-9]$/, "9", "4", "6.5"]);
+});
+
 test("history previews stored results until a successful roll", async ({
   page,
 }) => {
@@ -244,6 +344,10 @@ test("history re-rolls restore the form and resume the original random sequence"
   await expect(result).toHaveText(nextExpected());
 
   await selectMenuOption(page, engine, "Crypto");
+  await notation.fill("d6");
+  await page.getByRole("button", { name: "Roll dice", exact: true }).click();
+  await expect(result).toHaveText(/^d6:/);
+  await expect(history.getByRole("status")).toHaveText("2 rolls");
   await selectMenuOption(page, presenter, "SVG");
   const options = page.getByRole("button", {
     name: "Presenter options",
@@ -257,10 +361,9 @@ test("history re-rolls restore the form and resume the original random sequence"
   await options.click();
   await size.fill("72");
   await back.click();
+  await expect(options).toBeFocused();
   await variables.fill("{}");
   await maxQty.fill("1");
-  await notation.fill("d6");
-  await notation.press("Enter");
 
   await history
     .getByRole("button", { name: "Re-roll roll 1", exact: true })
